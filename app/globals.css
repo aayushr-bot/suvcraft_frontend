@@ -1,26 +1,55 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --page-top: rgb(255, 242, 209);
+  --page-bot: rgb(235, 235, 235);
+  --ink: #1c1c1c;
+  --ink-soft: #1f1f1f;
+  --ink-body: #404040;
+  --nav-link: #2d2d2d;
+  --muted: #605e5e;
+  --muted-2: #8c8c8c;
+  --hairline: #e8e8e8;
+  --rule: #aeaeae;
+  --pink: #ff0370;
+  --mint: #eefff9;
+  --paper: #fefefe;
+  --chip: #414141;
+  --soft-gray: #f5f5f5;
+  --soft-btn: #f3f3f3;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-body: var(--ink-body);
+  --color-nav-link: var(--nav-link);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+  --color-hairline: var(--hairline);
+  --color-rule: var(--rule);
+  --color-pink: var(--pink);
+  --color-mint: var(--mint);
+  --color-paper: var(--paper);
+  --color-chip: var(--chip);
+  --color-soft-gray: var(--soft-gray);
+  --color-soft-btn: var(--soft-btn);
+  --font-sans: var(--font-instrument-sans);
+  --font-display: var(--font-harmattan);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: linear-gradient(180deg, var(--page-top) 0%, var(--page-bot) 51%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-instrument-sans), system-ui, sans-serif;
+}
+
+@keyframes marquee-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  will-change: transform;
 }
