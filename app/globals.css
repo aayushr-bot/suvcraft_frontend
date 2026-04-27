@@ -34,13 +34,16 @@
   --color-chip: var(--chip);
   --color-soft-gray: var(--soft-gray);
   --color-soft-btn: var(--soft-btn);
+  --color-brand-purple: #3E0149;
   --font-sans: var(--font-instrument-sans);
   --font-display: var(--font-harmattan);
+  --font-bruno: var(--font-bruno-ace-sc);
 }
 
 body {
-  background: linear-gradient(180deg, var(--page-top) 0%, var(--page-bot) 51%);
-  background-attachment: fixed;
+  background-color: var(--page-bot);
+  background-image: linear-gradient(180deg, var(--page-top) 0px, var(--page-bot) 800px);
+  background-repeat: no-repeat;
   color: var(--ink);
   font-family: var(--font-instrument-sans), system-ui, sans-serif;
 }

@@ -1,5 +1,6 @@
 "use client";
 import { useRef } from "react";
+import Link from "next/link";
 import { BoltIcon, CartIcon, ChevronRight, HeartLine, Star, TagIcon } from "./icons";
 
 const tabs = ["Shoes", "Clothing", "Accessories", "Jewellery"];
@@ -76,9 +77,10 @@ export default function AllProducts() {
             style={{ width: "max-content" }}
           >
             {[...products, ...products].map((p, idx) => (
-              <article
+              <Link
                 key={idx}
-                className="relative flex flex-col overflow-hidden rounded-[18px] border border-[#e7e7e7] bg-paper"
+                href="/product"
+                className="group relative flex flex-col overflow-hidden rounded-[18px] border border-[#e7e7e7] bg-paper transition-all hover:shadow-md"
                 style={{ height: 360, width: 260 }}
               >
                 <div className="flex items-start justify-between px-3 pt-3">
@@ -92,21 +94,21 @@ export default function AllProducts() {
                       Bestseller
                     </span>
                   </div>
-                  <button type="button" aria-label="Favorite" className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-paper text-ink ring-1 ring-[#e7e7e7]">
+                  <button type="button" aria-label="Favorite" className="relative z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-paper text-ink ring-1 ring-[#e7e7e7]">
                     <HeartLine className="h-3.5 w-3.5 text-ink" />
                   </button>
                 </div>
 
                 <div className="relative flex flex-1 items-center justify-center px-4 pb-3 pt-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.img} alt="Product" className="h-[180px] w-full object-contain" />
-                  <button type="button" aria-label="Add to cart" className="absolute right-3 top-1 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-ink-soft text-white">
+                  <img src={p.img} alt="Product" className="h-[180px] w-full object-contain group-hover:scale-105 transition-transform duration-300" />
+                  <button type="button" aria-label="Add to cart" className="relative z-10 absolute right-3 top-1 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-ink-soft text-white">
                     <CartIcon className="h-3 w-3" />
                   </button>
                 </div>
 
-                <div className="border-t border-[#eeeeee] px-3 py-3">
-                  <h3 className="text-[12px] font-medium text-ink">Black T shirt for men Cotton blend</h3>
+                <div className="border-t border-[#eeeeee] px-3 py-3 bg-white">
+                  <h3 className="text-[12px] font-medium text-ink group-hover:underline">Black T shirt for men Cotton blend</h3>
                   <div className="mt-1 flex items-end gap-2">
                     <span className="text-[14px] font-semibold text-ink">$1200</span>
                     <span className="text-[12px] text-[#8c8c8c] line-through">$1300</span>
@@ -123,7 +125,7 @@ export default function AllProducts() {
                     </div>
                   </div>
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
         </div>
@@ -132,12 +134,12 @@ export default function AllProducts() {
       {/* Mobile/tablet grid */}
       <div className="mt-8 grid grid-cols-2 gap-3 md:hidden sm:grid-cols-3">
         {products.map((p, idx) => (
-          <article key={idx} className="relative flex flex-col overflow-hidden rounded-[18px] border border-[#e7e7e7] bg-paper">
+          <Link key={idx} href="/product" className="relative flex flex-col overflow-hidden rounded-[18px] border border-[#e7e7e7] bg-paper active:scale-[0.98] transition-transform">
             <div className="flex items-start justify-between px-3 pt-3">
               <span className="inline-flex h-[22px] items-center gap-0.5 rounded-[6px] bg-chip px-1.5 text-[10px] font-medium text-white">
                 <TagIcon className="h-2.5 w-2.5" />Offer
               </span>
-              <button type="button" aria-label="Favorite" className="flex h-[24px] w-[24px] items-center justify-center rounded-full bg-paper text-ink ring-1 ring-[#e7e7e7]">
+              <button type="button" aria-label="Favorite" className="relative z-10 flex h-[24px] w-[24px] items-center justify-center rounded-full bg-paper text-ink ring-1 ring-[#e7e7e7]">
                 <HeartLine className="h-3 w-3 text-ink" />
               </button>
             </div>
@@ -154,7 +156,7 @@ export default function AllProducts() {
                 </span>
               </div>
             </div>
-          </article>
+          </Link>
         ))}
       </div>
 

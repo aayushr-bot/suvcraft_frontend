@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Star } from "./icons";
 
 const cards = [
@@ -39,9 +40,9 @@ export default function TopSelling() {
 
       <div className="mt-8 grid grid-cols-2 items-end gap-4 md:grid-cols-4">
         {cards.map((p) => (
-          <article key={p.name} className="flex flex-col">
+          <Link key={p.name} href="/product" className="flex flex-col group">
             <div
-              className="relative overflow-hidden rounded-[16px]"
+              className="relative overflow-hidden rounded-[16px] group-hover:brightness-95 transition-all"
               style={{ height: p.height }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -53,7 +54,7 @@ export default function TopSelling() {
             </div>
             <div className="mt-3 flex items-center justify-between">
               <div>
-                <h3 className="text-[14px] font-medium text-ink">{p.name}</h3>
+                <h3 className="text-[14px] font-medium text-ink group-hover:underline">{p.name}</h3>
                 <span className="mt-1 inline-flex items-center gap-1 text-[12px] text-[#605e5e]">
                   <Star className="h-3 w-3 text-[#f5a524]" />
                   {p.rating}
@@ -63,7 +64,7 @@ export default function TopSelling() {
                 {p.price}
               </span>
             </div>
-          </article>
+          </Link>
         ))}
       </div>
     </section>
