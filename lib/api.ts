@@ -34,6 +34,9 @@ export type ProductDetail = Product & {
   category_id?: number;
   is_returnable?: number;
   cod_allowed?: number;
+  minimum_order_quantity?: number | null;
+  total_allowed_quantity?: number | null;
+  quantity_step_size?: number | null;
 };
 
 export type Category = {

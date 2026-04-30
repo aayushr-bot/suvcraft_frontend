@@ -43,10 +43,11 @@ function formatDeliveryDate(daysFromNow: number) {
 }
 
 export default function CartPage() {
-  const { items, removeFromCart, updateQty, total, count } = useCart();
+  const { items, removeFromCart, updateQty, updateLimits, total, count } = useCart();
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const [qtyErrors, setQtyErrors] = useState<Record<number, string>>({});
 
   const [pincode, setPincode] = useState("");
   const [pinInput, setPinInput] = useState("");
@@ -93,6 +94,74 @@ export default function CartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    items.forEach((item) => {
+      fetch(`${API}/api/v1/products/${item.id}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (cancelled || !j?.data) return;
+          const p = j.data;
+          const minQ = Math.max(1, Number(p.minimum_order_quantity) || 1);
+          const stepQ = Math.max(1, Number(p.quantity_step_size) || 1);
+          const stockCap = p.stock != null ? Number(p.stock) : Infinity;
+          const allowedCap = p.total_allowed_quantity != null ? Number(p.total_allowed_quantity) : Infinity;
+          const maxQ = Math.min(stockCap, allowedCap);
+          updateLimits(item.id, {
+            minQty: minQ,
+            maxQty: Number.isFinite(maxQ) ? maxQ : undefined,
+            step: stepQ,
+            stock: p.stock,
+          });
+          if (Number.isFinite(maxQ) && item.qty > maxQ) {
+            if (maxQ < minQ) {
+              removeFromCart(item.id);
+            } else {
+              updateQty(item.id, maxQ);
+              setQtyErrors((e) => ({
+                ...e,
+                [item.id]:
+                  allowedCap < stockCap
+                    ? `Adjusted to max ${allowedCap} per order.`
+                    : `Adjusted to ${stockCap} available in stock.`,
+              }));
+            }
+          } else if (item.qty < minQ) {
+            updateQty(item.id, minQ);
+          }
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function changeQty(item: typeof items[number], delta: number) {
+    const minQ = item.minQty ?? 1;
+    const maxQ = item.maxQty ?? Infinity;
+    const step = item.step ?? 1;
+    const next = item.qty + delta * step;
+    if (delta < 0 && next < minQ) {
+      setQtyErrors((e) => ({ ...e, [item.id]: `Minimum order quantity is ${minQ}.` }));
+      return;
+    }
+    if (delta > 0 && next > maxQ) {
+      const stockCap = item.stock != null ? Number(item.stock) : Infinity;
+      const msg = stockCap === maxQ
+        ? `Only ${maxQ} item${maxQ === 1 ? "" : "s"} available.`
+        : `Maximum ${maxQ} unit${maxQ === 1 ? "" : "s"} per order.`;
+      setQtyErrors((e) => ({ ...e, [item.id]: msg }));
+      return;
+    }
+    setQtyErrors((e) => {
+      const { [item.id]: _, ...rest } = e;
+      return rest;
+    });
+    updateQty(item.id, next);
+  }
+
   function handleCheckout() {
     if (isLoggedIn) router.push("/checkout");
     else setAuthOpen(true);
@@ -110,22 +179,25 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-[1440px] px-4 py-20 md:px-8 bg-white min-h-screen flex flex-col items-center justify-center gap-6">
-        <div className="text-[80px]">🛒</div>
-        <h2 className="text-[28px] font-bold text-ink">Your cart is empty</h2>
-        <p className="text-[15px] text-[#525151]">Add some products to get started.</p>
-        <Link
-          href="/"
-          className="inline-flex h-[54px] items-center justify-center rounded-[10px] bg-ink px-10 text-[16px] font-bold text-white hover:bg-black"
-        >
-          Shop Now
-        </Link>
+      <div className="w-full bg-white min-h-screen">
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-20 md:px-8 flex flex-col items-center justify-center gap-6">
+          <div className="text-[80px]">🛒</div>
+          <h2 className="text-[28px] font-bold text-ink">Your cart is empty</h2>
+          <p className="text-[15px] text-[#525151]">Add some products to get started.</p>
+          <Link
+            href="/"
+            className="inline-flex h-[54px] items-center justify-center rounded-[10px] bg-ink px-10 text-[16px] font-bold text-white hover:bg-black"
+          >
+            Shop Now
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-8 md:px-8 bg-white min-h-screen">
+    <div className="w-full bg-white min-h-screen">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-8 md:px-8">
       <div className="flex flex-col lg:flex-row gap-10">
         {/* Main Cart Content */}
         <div className="flex-1">
@@ -215,19 +287,26 @@ export default function CartPage() {
 
                       <div className="flex h-[40px] w-[108px] items-center justify-between rounded-[8px] border border-[#cfcfcf] px-3">
                         <button
-                          onClick={() => updateQty(item.id, item.qty - 1)}
-                          className="text-ink text-[20px] font-medium hover:text-brand-purple transition-colors leading-none"
+                          onClick={() => changeQty(item, -1)}
+                          disabled={item.qty - (item.step ?? 1) < (item.minQty ?? 1)}
+                          className="text-ink text-[20px] font-medium hover:text-brand-purple transition-colors leading-none disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           −
                         </button>
                         <span className="text-[15px] font-bold">{String(item.qty).padStart(2, "0")}</span>
                         <button
-                          onClick={() => updateQty(item.id, item.qty + 1)}
-                          className="text-ink text-[20px] font-medium hover:text-brand-purple transition-colors leading-none"
+                          onClick={() => changeQty(item, +1)}
+                          disabled={item.maxQty != null && item.qty + (item.step ?? 1) > item.maxQty}
+                          className="text-ink text-[20px] font-medium hover:text-brand-purple transition-colors leading-none disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           +
                         </button>
                       </div>
+                      {qtyErrors[item.id] && (
+                        <p className="text-[12px] text-red-500" role="alert">
+                          {qtyErrors[item.id]}
+                        </p>
+                      )}
 
                       <div className="text-[14px] text-ink font-medium">
                         Unit Price : <span className="font-bold">{fmt(item.price)}</span>
@@ -312,6 +391,7 @@ export default function CartPage() {
         onClose={() => setAuthOpen(false)}
         onSuccess={() => { setIsLoggedIn(true); setAuthOpen(false); router.push("/checkout"); }}
       />
+      </div>
     </div>
   );
 }

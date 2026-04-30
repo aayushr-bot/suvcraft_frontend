@@ -23,7 +23,7 @@ import { useCart } from "@/lib/cartContext";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const SHOP_LINK = { id: 0, label: "Shop", href: "/", slug: "shop" };
 
-type User = { name: string; email: string; mobile?: string };
+type User = { name: string; email: string; mobile?: string; image?: string };
 
 function pickDisplayName(user: User): { label: string; isMobile: boolean } {
   const raw = (user.name || "").trim();
@@ -82,7 +82,7 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
       .then((r) => r.ok ? r.json() : null)
       .then((j) => {
         const u = j?.data?.user;
-        if (u) setUser({ name: u.name || u.username || "", email: u.email || "", mobile: u.mobile || "" });
+        if (u) setUser({ name: u.name || u.username || "", email: u.email || "", mobile: u.mobile || "", image: u.image || "" });
       })
       .catch(() => {});
   }, []);
@@ -116,7 +116,7 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
             </button>
           </div>
         </div>
-        <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} />
+        <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} onUpdate={(u) => setUser(u)} />
         <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
       </header>
     );
@@ -171,7 +171,7 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
 
         {/* Popups */}
         <AuthModal isOpen={isSignInOpen} onClose={() => setIsSignInOpen(false)} onSuccess={(u) => { setUser(u); setIsSignInOpen(false); }} />
-        <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} />
+        <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} onUpdate={(u) => setUser(u)} />
         <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
 
         {/* Desktop + tablet category rail */}
@@ -275,7 +275,124 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
   );
 }
 
-function ProfileModal({ isOpen, onClose, user, onLogout }: { isOpen: boolean; onClose: () => void; user: User | null; onLogout: () => void }) {
+function resolveAvatar(image?: string): string | null {
+  if (!image) return null;
+  if (image.startsWith("http")) return image;
+  if (image.startsWith("/")) return image;
+  const base = process.env.NEXT_PUBLIC_UPLOADS_URL ?? `${API}/uploads`;
+  return `${base}/${image}`;
+}
+
+function ProfileModal({ isOpen, onClose, user, onLogout, onUpdate }: { isOpen: boolean; onClose: () => void; user: User | null; onLogout: () => void; onUpdate?: (u: User) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [pwOpen, setPwOpen] = useState(false);
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwErr, setPwErr] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarErr, setAvatarErr] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(user?.name || "");
+      setEmail(user?.email || "");
+      setEditing(false);
+      setErr("");
+      setBusy(false);
+      setPwOpen(false);
+      setCurPw("");
+      setNewPw("");
+      setConfirmPw("");
+      setPwBusy(false);
+      setPwErr("");
+      setPwSuccess("");
+      setAvatarBusy(false);
+      setAvatarErr("");
+    }
+  }, [isOpen, user]);
+
+  async function save() {
+    setErr("");
+    if (!name.trim()) { setErr("Name cannot be empty."); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setErr("Enter a valid email address."); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/api/v1/auth/me`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: name.trim(), email: email.trim() }),
+      });
+      const json = await res.json();
+      if (json.error) { setErr(json.message || "Could not update profile."); return; }
+      const u = json.data?.user || {};
+      onUpdate?.({ name: u.name || u.username || name.trim(), email: u.email || email.trim(), mobile: u.mobile || user?.mobile || "", image: u.image || user?.image || "" });
+      setEditing(false);
+    } catch {
+      setErr("Network error. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changePassword() {
+    setPwErr("");
+    setPwSuccess("");
+    if (newPw.length < 6) { setPwErr("New password must be at least 6 characters."); return; }
+    if (newPw !== confirmPw) { setPwErr("Passwords do not match."); return; }
+    setPwBusy(true);
+    try {
+      const res = await fetch(`${API}/api/v1/auth/me`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ current_password: curPw, new_password: newPw }),
+      });
+      const json = await res.json();
+      if (json.error) { setPwErr(json.message || "Could not update password."); return; }
+      setPwSuccess("Password updated.");
+      setCurPw(""); setNewPw(""); setConfirmPw("");
+    } catch {
+      setPwErr("Network error. Please try again.");
+    } finally {
+      setPwBusy(false);
+    }
+  }
+
+  async function uploadAvatar(file: File) {
+    setAvatarErr("");
+    if (!/^image\//.test(file.type)) { setAvatarErr("Please select an image file."); return; }
+    if (file.size > 5 * 1024 * 1024) { setAvatarErr("Image must be under 5MB."); return; }
+    setAvatarBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API}/api/v1/me/avatar`, { method: "POST", credentials: "include", body: fd });
+      const json = await res.json();
+      if (json.error) { setAvatarErr(json.message || "Upload failed."); return; }
+      const newImg = json.data?.path || "";
+      onUpdate?.({
+        name: user?.name || "",
+        email: user?.email || "",
+        mobile: user?.mobile || "",
+        image: newImg,
+      });
+    } catch {
+      setAvatarErr("Network error. Please try again.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  const avatarUrl = resolveAvatar(user?.image);
+
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="flex flex-col items-start">
@@ -285,15 +402,135 @@ function ProfileModal({ isOpen, onClose, user, onLogout }: { isOpen: boolean; on
         </div>
 
         <div className="w-full">
-          <div className="flex items-center gap-6 mb-8">
-            <div className="h-[120px] w-[120px] rounded-full bg-[#d9d9d9] flex-shrink-0 flex items-center justify-center">
-              <UserIcon className="h-12 w-12 text-[#a0a0a0]" strokeWidth={1.2} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <h3 className="text-[24px] font-medium text-ink">{user ? `Hello, ${(user.name || user.email || "User").split(" ")[0]}` : "Hello Guest"}</h3>
-              {user && <span className="text-[15px] text-[#525151]">{user.email}</span>}
-            </div>
+          <div className="flex items-start gap-6 mb-8 w-full">
+            <label className="relative h-[120px] w-[120px] rounded-full bg-[#d9d9d9] flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer group">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
+              ) : (
+                <UserIcon className="h-12 w-12 text-[#a0a0a0]" strokeWidth={1.2} />
+              )}
+              <span className={`absolute inset-0 flex items-center justify-center bg-black/45 text-white text-[12px] font-semibold transition-opacity ${avatarBusy ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                {avatarBusy ? "Uploading…" : "Change photo"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={avatarBusy || !user}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ""; }}
+                className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+              />
+            </label>
+            {!editing ? (
+              <div className="flex flex-col gap-1 flex-1">
+                <h3 className="text-[24px] font-medium text-ink">{user ? `Hello, ${(user.name || user.email || "User").split(" ")[0]}` : "Hello Guest"}</h3>
+                {user && <span className="text-[15px] text-[#525151]">{user.email}</span>}
+                {user && user.mobile && <span className="text-[13px] text-[#8c8c8c]">+91 {user.mobile}</span>}
+                {avatarErr && <p className="text-[12px] text-red-500 mt-1">{avatarErr}</p>}
+                {user && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="inline-flex h-[36px] items-center justify-center rounded-[18px] border border-[#d4d4d4] px-4 text-[13px] font-semibold text-ink hover:bg-black/5"
+                    >
+                      Edit details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPwOpen((o) => !o)}
+                      className="inline-flex h-[36px] items-center justify-center rounded-[18px] border border-[#d4d4d4] px-4 text-[13px] font-semibold text-ink hover:bg-black/5"
+                    >
+                      {pwOpen ? "Close password" : "Change password"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 flex-1">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-semibold text-[#525151]">Full Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="h-[44px] rounded-[10px] bg-[#f8f8fb] px-4 text-[14px] outline-none border border-transparent focus:border-brand-purple"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[12px] font-semibold text-[#525151]">Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-[44px] rounded-[10px] bg-[#f8f8fb] px-4 text-[14px] outline-none border border-transparent focus:border-brand-purple"
+                  />
+                </div>
+                {err && <p className="text-[13px] text-red-500">{err}</p>}
+                <div className="flex gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={save}
+                    disabled={busy}
+                    className="h-[40px] rounded-[20px] bg-brand-purple px-5 text-[13px] font-bold text-white disabled:opacity-60"
+                  >
+                    {busy ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditing(false); setErr(""); setName(user?.name || ""); setEmail(user?.email || ""); }}
+                    disabled={busy}
+                    className="h-[40px] rounded-[20px] border border-[#d4d4d4] px-5 text-[13px] font-medium text-[#525151]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
+
+          {pwOpen && user && (
+            <div className="mb-8 rounded-[14px] border border-[#e7e7e7] bg-[#fafafa] p-5 flex flex-col gap-3">
+              <h4 className="text-[15px] font-bold text-ink">Change password</h4>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-[#525151]">Current password</label>
+                <input
+                  type="password"
+                  value={curPw}
+                  onChange={(e) => setCurPw(e.target.value)}
+                  placeholder="Leave empty if you have not set one"
+                  className="h-[44px] rounded-[10px] bg-white px-4 text-[14px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-[#525151]">New password</label>
+                <input
+                  type="password"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  className="h-[44px] rounded-[10px] bg-white px-4 text-[14px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-semibold text-[#525151]">Confirm new password</label>
+                <input
+                  type="password"
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                  className="h-[44px] rounded-[10px] bg-white px-4 text-[14px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+                />
+              </div>
+              {pwErr && <p className="text-[13px] text-red-500">{pwErr}</p>}
+              {pwSuccess && <p className="text-[13px] text-green-600">{pwSuccess}</p>}
+              <button
+                type="button"
+                onClick={changePassword}
+                disabled={pwBusy}
+                className="self-start h-[40px] rounded-[20px] bg-brand-purple px-5 text-[13px] font-bold text-white disabled:opacity-60"
+              >
+                {pwBusy ? "Updating…" : "Update password"}
+              </button>
+            </div>
+          )}
 
           <hr className="mb-8 border-dashed border-[#d4d4d4]" />
 

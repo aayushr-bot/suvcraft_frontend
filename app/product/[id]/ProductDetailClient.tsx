@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   CartIcon,
   ChevronRight,
+  HeartFill,
   HeartLine,
   MinusIcon,
   Plus,
@@ -15,8 +16,10 @@ import {
 import { type ProductDetail, type Product, type ProductRating, type RatingSummary, imgUrl } from "@/lib/api";
 import { useCart } from "@/lib/cartContext";
 import ProductImage from "../../components/ProductImage";
+import AuthModal from "../../components/AuthModal";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 function resolveImg(path: string): string {
   if (!path) return PLACEHOLDER_IMG;
@@ -95,15 +98,170 @@ export default function ProductDetailClient({
   const images = parseImages(product);
   const { current, original } = getPrice(product);
 
+  const minQty = Math.max(1, Number(product.minimum_order_quantity) || 1);
+  const stepSize = Math.max(1, Number(product.quantity_step_size) || 1);
+  const stockCap = product.stock != null ? Number(product.stock) : Infinity;
+  const allowedCap = product.total_allowed_quantity != null
+    ? Number(product.total_allowed_quantity)
+    : Infinity;
+  const maxQty = Math.min(stockCap, allowedCap);
+  const isOutOfStock = product.stock === 0 || maxQty < minQty;
+
   const { addToCart } = useCart();
   const [activeImg, setActiveImg] = useState(images[0]);
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(minQty);
   const [showCartPopup, setShowCartPopup] = useState(false);
+  const [popupMsg, setPopupMsg] = useState("Product added to cart.");
+  const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [qtyError, setQtyError] = useState("");
+
+  useEffect(() => {
+    fetch(`${API}/api/v1/auth/me`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setIsAuthed(Boolean(j?.data?.user)))
+      .catch(() => setIsAuthed(false));
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("wishlist");
+      const ids: number[] = raw ? JSON.parse(raw) : [];
+      setIsWishlisted(ids.includes(product.id));
+    } catch {}
+  }, [product.id]);
+
+  const showToast = (msg: string) => {
+    setPopupMsg(msg);
+    setShowCartPopup(true);
+    setTimeout(() => setShowCartPopup(false), 1000);
+  };
+
+  const limitMsg = () => {
+    if (allowedCap < stockCap) {
+      return `Maximum ${allowedCap} unit${allowedCap === 1 ? "" : "s"} per order.`;
+    }
+    return `Only ${stockCap} item${stockCap === 1 ? "" : "s"} available.`;
+  };
 
   const handleAddToCart = () => {
-    addToCart({ id: product.id, name: product.name, image: images[0], price: current }, qty);
-    setShowCartPopup(true);
-    setTimeout(() => setShowCartPopup(false), 3000);
+    if (isOutOfStock) {
+      setQtyError("This product is out of stock.");
+      return;
+    }
+    if (qty < minQty) {
+      setQtyError(`Minimum order quantity is ${minQty}.`);
+      return;
+    }
+    if (qty > maxQty) {
+      setQtyError(limitMsg());
+      return;
+    }
+    setQtyError("");
+    addToCart(
+      {
+        id: product.id,
+        name: product.name,
+        image: images[0],
+        price: current,
+        minQty,
+        maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
+        step: stepSize,
+        stock: product.stock,
+      },
+      qty,
+    );
+    showToast("Product added to cart.");
+  };
+
+  const decQty = () => {
+    if (qty - stepSize < minQty) {
+      setQtyError(`Minimum order quantity is ${minQty}.`);
+      return;
+    }
+    setQtyError("");
+    setQty(qty - stepSize);
+  };
+
+  const incQty = () => {
+    if (qty + stepSize > maxQty) {
+      setQtyError(limitMsg());
+      return;
+    }
+    setQtyError("");
+    setQty(qty + stepSize);
+  };
+
+  const handleShare = async () => {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    const shareData = { title: product.name, text: product.short_description || product.name, url };
+    try {
+      if (typeof navigator !== "undefined" && (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share) {
+        await (navigator as Navigator & { share: (d: ShareData) => Promise<void> }).share(shareData);
+        return;
+      }
+    } catch {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link copied to clipboard.");
+    } catch {
+      showToast("Could not share.");
+    }
+  };
+
+  const handleWishlist = () => {
+    if (!isAuthed) {
+      setShowAuth(true);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem("wishlist");
+      const ids: number[] = raw ? JSON.parse(raw) : [];
+      const next = ids.includes(product.id) ? ids.filter((i) => i !== product.id) : [...ids, product.id];
+      localStorage.setItem("wishlist", JSON.stringify(next));
+      const added = next.includes(product.id);
+      setIsWishlisted(added);
+      showToast(added ? "Added to wishlist." : "Removed from wishlist.");
+    } catch {
+      showToast("Could not update wishlist.");
+    }
+  };
+
+  const handleBuyNow = () => {
+    if (isOutOfStock) {
+      setQtyError("This product is out of stock.");
+      return;
+    }
+    if (qty < minQty) {
+      setQtyError(`Minimum order quantity is ${minQty}.`);
+      return;
+    }
+    if (qty > maxQty) {
+      setQtyError(limitMsg());
+      return;
+    }
+    setQtyError("");
+    if (!isAuthed) {
+      setShowAuth(true);
+      return;
+    }
+    addToCart(
+      {
+        id: product.id,
+        name: product.name,
+        image: images[0],
+        price: current,
+        minQty,
+        maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
+        step: stepSize,
+        stock: product.stock,
+      },
+      qty,
+    );
+    window.location.href = "/checkout";
   };
 
   const breadcrumbs = [
@@ -115,7 +273,8 @@ export default function ProductDetailClient({
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8 bg-white min-h-screen">
+    <div className="w-full bg-white min-h-screen">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8">
       {/* Breadcrumbs */}
       <nav className="flex flex-wrap items-center gap-2 text-[13px] text-[#8c8c8c]">
         {breadcrumbs.map((b, i) => (
@@ -146,11 +305,20 @@ export default function ProductDetailClient({
             </div>
 
             <div className="flex flex-col gap-4 pt-2">
-              <button className="flex h-[52px] w-[52px] items-center justify-center rounded-[10px] bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0] shadow-sm">
+              <button
+                onClick={handleShare}
+                aria-label="Share product"
+                className="flex h-[52px] w-[52px] items-center justify-center rounded-[10px] bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0] shadow-sm"
+              >
                 <ShareIcon className="h-6 w-6" />
               </button>
-              <button className="flex h-[52px] w-[52px] items-center justify-center rounded-[10px] bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0] shadow-sm">
-                <HeartLine className="h-6 w-6" />
+              <button
+                onClick={handleWishlist}
+                aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                aria-pressed={isWishlisted}
+                className={`flex h-[52px] w-[52px] items-center justify-center rounded-[10px] shadow-sm transition-colors ${isWishlisted ? "bg-[#fdecec] text-red-500 hover:bg-[#fadcdc]" : "bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0]"}`}
+              >
+                {isWishlisted ? <HeartFill className="h-6 w-6" /> : <HeartLine className="h-6 w-6" />}
               </button>
             </div>
           </div>
@@ -243,8 +411,9 @@ export default function ProductDetailClient({
             </span>
             <div className="inline-flex h-[44px] items-center rounded-[8px] border border-[#e7e7e7] bg-[#fdfdfd]">
               <button
-                onClick={() => setQty(Math.max(1, qty - 1))}
-                className="flex h-full w-[44px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-l-[8px]"
+                onClick={decQty}
+                disabled={isOutOfStock || qty - stepSize < minQty}
+                className="flex h-full w-[44px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-l-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <MinusIcon className="h-4 w-4" />
               </button>
@@ -252,12 +421,25 @@ export default function ProductDetailClient({
                 {qty.toString().padStart(2, "0")}
               </span>
               <button
-                onClick={() => setQty(qty + 1)}
-                className="flex h-full w-[44px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-r-[8px]"
+                onClick={incQty}
+                disabled={isOutOfStock || qty + stepSize > maxQty}
+                className="flex h-full w-[44px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-r-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus className="h-4 w-4" />
               </button>
             </div>
+            {(minQty > 1 || allowedCap !== Infinity) && !qtyError && (
+              <p className="mt-2 text-[12px] text-[#8c8c8c]">
+                {minQty > 1 && `Min order: ${minQty}`}
+                {minQty > 1 && allowedCap !== Infinity && " · "}
+                {allowedCap !== Infinity && `Max per order: ${allowedCap}`}
+              </p>
+            )}
+            {qtyError && (
+              <p className="mt-2 text-[13px] text-red-500" role="alert">
+                {qtyError}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-4">
@@ -269,7 +451,7 @@ export default function ProductDetailClient({
               {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
             </button>
             <button
-              onClick={() => { handleAddToCart(); window.location.href = "/checkout"; }}
+              onClick={handleBuyNow}
               disabled={product.stock === 0}
               className="inline-flex h-[54px] w-[160px] items-center justify-center rounded-[10px] border border-ink text-[16px] font-bold text-ink hover:bg-black/5 disabled:opacity-50"
             >
@@ -278,7 +460,8 @@ export default function ProductDetailClient({
           </div>
 
           <div className="text-[13px] text-[#8c8c8c]">
-            {product.is_returnable ? "✓ Returns accepted" : "No returns"} &nbsp;·&nbsp;
+            {product.is_returnable ? "✓ Returns accepted" : "No returns"}
+            {" · "}
             {product.cod_allowed ? "✓ Cash on delivery available" : "Online payment only"}
           </div>
         </div>
@@ -441,6 +624,29 @@ export default function ProductDetailClient({
         </>
       )}
 
+      <AuthModal
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
+        onSuccess={() => {
+          setIsAuthed(true);
+          setShowAuth(false);
+          addToCart(
+      {
+        id: product.id,
+        name: product.name,
+        image: images[0],
+        price: current,
+        minQty,
+        maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
+        step: stepSize,
+        stock: product.stock,
+      },
+      qty,
+    );
+          window.location.href = "/checkout";
+        }}
+      />
+
       {/* Added to Cart Popup */}
       {showCartPopup && (
         <>
@@ -448,11 +654,12 @@ export default function ProductDetailClient({
           <div className="fixed bottom-10 left-1/2 z-[100] flex -translate-x-1/2">
             <div className="flex items-center gap-3 rounded-[12px] bg-white px-6 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-[#e7e7e7]">
               <CheckCircleSolid className="h-6 w-6 text-green-600" />
-              <span className="text-[15px] font-medium text-ink">Product added to cart.</span>
+              <span className="text-[15px] font-medium text-ink">{popupMsg}</span>
             </div>
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
