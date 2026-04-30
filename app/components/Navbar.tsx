@@ -23,7 +23,7 @@ import { useCart } from "@/lib/cartContext";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const SHOP_LINK = { id: 0, label: "Shop", href: "/", slug: "shop" };
 
-type User = { name: string; email: string; mobile?: string; image?: string };
+type User = { name: string; email: string; mobile?: string; image?: string; has_password?: boolean };
 
 function pickDisplayName(user: User): { label: string; isMobile: boolean } {
   const raw = (user.name || "").trim();
@@ -82,7 +82,7 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
       .then((r) => r.ok ? r.json() : null)
       .then((j) => {
         const u = j?.data?.user;
-        if (u) setUser({ name: u.name || u.username || "", email: u.email || "", mobile: u.mobile || "", image: u.image || "" });
+        if (u) setUser({ name: u.name || u.username || "", email: u.email || "", mobile: u.mobile || "", image: u.image || "", has_password: !!u.has_password });
       })
       .catch(() => {});
   }, []);
@@ -357,8 +357,15 @@ function ProfileModal({ isOpen, onClose, user, onLogout, onUpdate }: { isOpen: b
       });
       const json = await res.json();
       if (json.error) { setPwErr(json.message || "Could not update password."); return; }
-      setPwSuccess("Password updated.");
+      setPwSuccess(user?.has_password ? "Password updated." : "Password set.");
       setCurPw(""); setNewPw(""); setConfirmPw("");
+      onUpdate?.({
+        name: user?.name || "",
+        email: user?.email || "",
+        mobile: user?.mobile || "",
+        image: user?.image || "",
+        has_password: true,
+      });
     } catch {
       setPwErr("Network error. Please try again.");
     } finally {
@@ -392,172 +399,202 @@ function ProfileModal({ isOpen, onClose, user, onLogout, onUpdate }: { isOpen: b
   }
 
   const avatarUrl = resolveAvatar(user?.image);
+  const displayName = user ? (user.name || user.email || "User").split(" ")[0] : "Guest";
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
-      <div className="flex flex-col items-start">
-        <div className="flex items-center gap-4 mb-10">
-          <img src="/figma/suvcraft-logo.png" alt="" className="h-[48px] w-auto" />
-          <span className="font-bruno text-[26px] font-bold text-brand-purple uppercase tracking-[0.08em]">SUVCRAFT</span>
+      <div className="flex flex-col items-stretch -m-2">
+        {/* Brand header */}
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <img src="/figma/suvcraft-logo.png" alt="" className="h-[24px] w-auto" />
+          <span className="font-bruno text-[14px] font-bold text-brand-purple uppercase tracking-[0.08em]">SUVCRAFT</span>
         </div>
 
-        <div className="w-full">
-          <div className="flex items-start gap-6 mb-8 w-full">
-            <label className="relative h-[120px] w-[120px] rounded-full bg-[#d9d9d9] flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer group">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
-              ) : (
-                <UserIcon className="h-12 w-12 text-[#a0a0a0]" strokeWidth={1.2} />
-              )}
-              <span className={`absolute inset-0 flex items-center justify-center bg-black/45 text-white text-[12px] font-semibold transition-opacity ${avatarBusy ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-                {avatarBusy ? "Uploading…" : "Change photo"}
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                disabled={avatarBusy || !user}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ""; }}
-                className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
-              />
-            </label>
-            {!editing ? (
-              <div className="flex flex-col gap-1 flex-1">
-                <h3 className="text-[24px] font-medium text-ink">{user ? `Hello, ${(user.name || user.email || "User").split(" ")[0]}` : "Hello Guest"}</h3>
-                {user && <span className="text-[15px] text-[#525151]">{user.email}</span>}
-                {user && user.mobile && <span className="text-[13px] text-[#8c8c8c]">+91 {user.mobile}</span>}
-                {avatarErr && <p className="text-[12px] text-red-500 mt-1">{avatarErr}</p>}
-                {user && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditing(true)}
-                      className="inline-flex h-[36px] items-center justify-center rounded-[18px] border border-[#d4d4d4] px-4 text-[13px] font-semibold text-ink hover:bg-black/5"
-                    >
-                      Edit details
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPwOpen((o) => !o)}
-                      className="inline-flex h-[36px] items-center justify-center rounded-[18px] border border-[#d4d4d4] px-4 text-[13px] font-semibold text-ink hover:bg-black/5"
-                    >
-                      {pwOpen ? "Close password" : "Change password"}
-                    </button>
-                  </div>
-                )}
-              </div>
+        {/* Avatar + name */}
+        <div className="flex flex-col items-center text-center">
+          <label className="relative h-[68px] w-[68px] rounded-full bg-gradient-to-br from-[#f3eaf7] to-[#e8dff0] ring-2 ring-white shadow-[0_2px_8px_rgba(62,1,73,0.15)] flex-shrink-0 flex items-center justify-center overflow-hidden cursor-pointer group">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex flex-col gap-3 flex-1">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[12px] font-semibold text-[#525151]">Full Name</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="h-[44px] rounded-[10px] bg-[#f8f8fb] px-4 text-[14px] outline-none border border-transparent focus:border-brand-purple"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[12px] font-semibold text-[#525151]">Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-[44px] rounded-[10px] bg-[#f8f8fb] px-4 text-[14px] outline-none border border-transparent focus:border-brand-purple"
-                  />
-                </div>
-                {err && <p className="text-[13px] text-red-500">{err}</p>}
-                <div className="flex gap-2 mt-1">
-                  <button
-                    type="button"
-                    onClick={save}
-                    disabled={busy}
-                    className="h-[40px] rounded-[20px] bg-brand-purple px-5 text-[13px] font-bold text-white disabled:opacity-60"
-                  >
-                    {busy ? "Saving…" : "Save"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setEditing(false); setErr(""); setName(user?.name || ""); setEmail(user?.email || ""); }}
-                    disabled={busy}
-                    className="h-[40px] rounded-[20px] border border-[#d4d4d4] px-5 text-[13px] font-medium text-[#525151]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+              <span className="text-[26px] font-bold text-brand-purple">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
             )}
-          </div>
+            <span className={`absolute inset-0 flex items-center justify-center bg-black/55 text-white text-[10px] font-semibold transition-opacity ${avatarBusy ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+              {avatarBusy ? "…" : "Edit"}
+            </span>
+            <span className="pointer-events-none absolute -bottom-0.5 -right-0.5 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-brand-purple text-white shadow-sm ring-2 ring-white">
+              <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              disabled={avatarBusy || !user}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ""; }}
+              className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+          </label>
 
-          {pwOpen && user && (
-            <div className="mb-8 rounded-[14px] border border-[#e7e7e7] bg-[#fafafa] p-5 flex flex-col gap-3">
-              <h4 className="text-[15px] font-bold text-ink">Change password</h4>
+          {!editing ? (
+            <div className="mt-2.5 flex flex-col items-center gap-0">
+              <h3 className="text-[16px] font-bold text-ink leading-tight">{user ? `Hello, ${displayName}` : "Hello Guest"}</h3>
+              {user && <span className="text-[12px] text-[#525151] mt-0.5">{user.email}</span>}
+              {user && user.mobile && <span className="text-[11px] text-[#8c8c8c]">+91 {user.mobile}</span>}
+              {avatarErr && <p className="text-[11px] text-red-500 mt-1">{avatarErr}</p>}
+              {user && (
+                <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="inline-flex h-[28px] items-center justify-center rounded-full border border-[#d4d4d4] px-3 text-[11px] font-semibold text-ink hover:border-ink hover:bg-black/5 transition-all"
+                  >
+                    Edit profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPwOpen((o) => !o)}
+                    className={`inline-flex h-[28px] items-center justify-center rounded-full px-3 text-[11px] font-semibold transition-all ${pwOpen ? "bg-brand-purple text-white" : "border border-[#d4d4d4] text-ink hover:border-ink hover:bg-black/5"}`}
+                  >
+                    {pwOpen ? "Hide" : (user.has_password ? "Change password" : "Set password")}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-3 w-full flex flex-col gap-2 text-left">
               <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-semibold text-[#525151]">Current password</label>
+                <label className="text-[10px] uppercase tracking-wide font-semibold text-[#8c8c8c]">Full Name</label>
                 <input
-                  type="password"
-                  value={curPw}
-                  onChange={(e) => setCurPw(e.target.value)}
-                  placeholder="Leave empty if you have not set one"
-                  className="h-[44px] rounded-[10px] bg-white px-4 text-[14px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="h-[36px] rounded-[8px] bg-[#f6f6f8] px-3 text-[13px] outline-none border border-[#f6f6f8] focus:border-brand-purple focus:bg-white transition-all"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-semibold text-[#525151]">New password</label>
+                <label className="text-[10px] uppercase tracking-wide font-semibold text-[#8c8c8c]">Email</label>
                 <input
-                  type="password"
-                  value={newPw}
-                  onChange={(e) => setNewPw(e.target.value)}
-                  className="h-[44px] rounded-[10px] bg-white px-4 text-[14px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-[36px] rounded-[8px] bg-[#f6f6f8] px-3 text-[13px] outline-none border border-[#f6f6f8] focus:border-brand-purple focus:bg-white transition-all"
                 />
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[12px] font-semibold text-[#525151]">Confirm new password</label>
-                <input
-                  type="password"
-                  value={confirmPw}
-                  onChange={(e) => setConfirmPw(e.target.value)}
-                  className="h-[44px] rounded-[10px] bg-white px-4 text-[14px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
-                />
+              {err && <p className="text-[11px] text-red-500">{err}</p>}
+              <div className="flex gap-1.5 mt-0.5 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setEditing(false); setErr(""); setName(user?.name || ""); setEmail(user?.email || ""); }}
+                  disabled={busy}
+                  className="h-[32px] rounded-full border border-[#d4d4d4] px-4 text-[12px] font-medium text-[#525151] hover:bg-black/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={save}
+                  disabled={busy}
+                  className="h-[32px] rounded-full bg-brand-purple px-4 text-[12px] font-bold text-white shadow-sm hover:brightness-110 disabled:opacity-60 transition-all"
+                >
+                  {busy ? "Saving…" : "Save"}
+                </button>
               </div>
-              {pwErr && <p className="text-[13px] text-red-500">{pwErr}</p>}
-              {pwSuccess && <p className="text-[13px] text-green-600">{pwSuccess}</p>}
-              <button
-                type="button"
-                onClick={changePassword}
-                disabled={pwBusy}
-                className="self-start h-[40px] rounded-[20px] bg-brand-purple px-5 text-[13px] font-bold text-white disabled:opacity-60"
-              >
-                {pwBusy ? "Updating…" : "Update password"}
-              </button>
             </div>
           )}
+        </div>
 
-          <hr className="mb-8 border-dashed border-[#d4d4d4]" />
-
-          <div className="flex flex-col gap-6">
-            <Link href="/orders" onClick={onClose} className="flex items-center justify-between group">
-              <div className="flex items-center gap-5 text-[#525151] group-hover:text-ink transition-colors">
-                <OrderIcon className="h-8 w-8" />
-                <span className="text-[22px] font-medium">My Orders</span>
-              </div>
-              <ChevronRight className="h-7 w-7 text-[#525151]" />
-            </Link>
-
-            <button className="flex items-center gap-5 text-[#525151] hover:text-ink transition-colors text-left">
-              <BanIcon className="h-8 w-8" />
-              <span className="text-[22px] font-medium">Delete Account</span>
-            </button>
-
-            <button className="flex items-center gap-5 text-[#525151] hover:text-ink transition-colors text-left">
-              <HeadsetIcon className="h-8 w-8" />
-              <span className="text-[22px] font-medium">Help</span>
-            </button>
-
-            <button onClick={onLogout} className="flex items-center gap-5 text-[#ff0000] hover:brightness-90 transition-all mt-2 text-left">
-              <LogOutIcon className="h-8 w-8" strokeWidth={2.5} />
-              <span className="text-[22px] font-bold">Log Out</span>
+        {/* Password panel */}
+        {pwOpen && user && (
+          <div className="mt-3 rounded-[12px] border border-[#ececec] bg-[#fafafa] p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[12px] font-bold text-ink">{user.has_password ? "Change password" : "Set password"}</h4>
+              <span className="text-[10px] text-[#8c8c8c]">Min. 6 chars</span>
+            </div>
+            {!user.has_password && (
+              <p className="text-[11px] text-[#8c8c8c] -mt-1">
+                You signed in with OTP. Set a password to enable email/password login.
+              </p>
+            )}
+            {user.has_password && (
+              <input
+                type="password"
+                value={curPw}
+                onChange={(e) => setCurPw(e.target.value)}
+                placeholder="Current password"
+                className="h-[34px] rounded-[8px] bg-white px-3 text-[12px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+              />
+            )}
+            <div className="grid grid-cols-2 gap-1.5">
+              <input
+                type="password"
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="New password"
+                className="h-[34px] rounded-[8px] bg-white px-3 text-[12px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+              />
+              <input
+                type="password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="Confirm new"
+                className="h-[34px] rounded-[8px] bg-white px-3 text-[12px] outline-none border border-[#e7e7e7] focus:border-brand-purple"
+              />
+            </div>
+            {pwErr && <p className="text-[11px] text-red-500">{pwErr}</p>}
+            {pwSuccess && <p className="text-[11px] text-green-600 font-medium">✓ {pwSuccess}</p>}
+            <button
+              type="button"
+              onClick={changePassword}
+              disabled={pwBusy}
+              className="self-end h-[30px] rounded-full bg-brand-purple px-4 text-[11px] font-bold text-white shadow-sm hover:brightness-110 disabled:opacity-60 transition-all"
+            >
+              {pwBusy ? (user.has_password ? "Updating…" : "Saving…") : (user.has_password ? "Update" : "Set password")}
             </button>
           </div>
+        )}
+
+        {/* Menu */}
+        <div className="mt-3 pt-2 border-t border-dashed border-[#e7e7e7] flex flex-col gap-0.5">
+          <Link href="/orders" onClick={onClose} className="flex items-center justify-between rounded-[8px] px-2 py-1.5 hover:bg-[#fafafa] transition-colors group">
+            <div className="flex items-center gap-2.5 text-[#525151] group-hover:text-ink">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f3eaf7] text-brand-purple">
+                <OrderIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="text-[13px] font-semibold">My Orders</span>
+            </div>
+            <ChevronRight className="h-3.5 w-3.5 text-[#8c8c8c]" />
+          </Link>
+
+          <button className="flex items-center justify-between rounded-[8px] px-2 py-1.5 hover:bg-[#fafafa] transition-colors group text-left">
+            <div className="flex items-center gap-2.5 text-[#525151] group-hover:text-ink">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fdecec] text-red-500">
+                <BanIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="text-[13px] font-semibold">Delete Account</span>
+            </div>
+            <ChevronRight className="h-3.5 w-3.5 text-[#8c8c8c]" />
+          </button>
+
+          <button className="flex items-center justify-between rounded-[8px] px-2 py-1.5 hover:bg-[#fafafa] transition-colors group text-left">
+            <div className="flex items-center gap-2.5 text-[#525151] group-hover:text-ink">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#eef6ff] text-blue-500">
+                <HeadsetIcon className="h-3.5 w-3.5" />
+              </span>
+              <span className="text-[13px] font-semibold">Help</span>
+            </div>
+            <ChevronRight className="h-3.5 w-3.5 text-[#8c8c8c]" />
+          </button>
+
+          <button
+            onClick={onLogout}
+            className="mt-1.5 flex items-center justify-center gap-1.5 h-[36px] rounded-full bg-[#fdecec] text-red-600 font-bold text-[12px] hover:bg-red-100 transition-colors"
+          >
+            <LogOutIcon className="h-4 w-4" strokeWidth={2.5} />
+            Log Out
+          </button>
         </div>
       </div>
     </Modal>
