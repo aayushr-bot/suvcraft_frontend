@@ -82,12 +82,15 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: { isOpen: bool
     setError("");
     const mob = mobile.trim().replace(/\D/g, "");
     if (mob.length < 6) { setError("Enter a valid mobile number."); return; }
-    if (mode === "signup" && !name.trim()) { setError("Full name is required."); return; }
+    // Name and email are optional for OTP signup — backend auto-fills if missing.
 
     setBusy(true);
     try {
       const bodyObj: Record<string, string> = { action: "send", mobile: mob };
-      if (mode === "signup") { bodyObj.name = name.trim(); if (email.trim()) bodyObj.email = email.trim(); }
+      if (mode === "signup") {
+        if (name.trim()) bodyObj.name = name.trim();
+        if (email.trim()) bodyObj.email = email.trim();
+      }
       const res = await fetch(`${API}/api/v1/auth/otp`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(bodyObj) });
       const json = await res.json();
       if (json.error) { setError(json.message || "Failed to send OTP."); return; }
@@ -155,7 +158,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: { isOpen: bool
               {!isSignin && (
                 <>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[14px] font-semibold text-ink">Full Name <span className="text-red-500">*</span></label>
+                    <label className="text-[14px] font-semibold text-ink">Full Name <span className="text-[#8c8c8c] font-normal text-[12px]">(optional)</span></label>
                     <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="John Doe" className={inputCls} />
                   </div>
                   <div className="flex flex-col gap-2">
