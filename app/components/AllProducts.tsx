@@ -6,6 +6,9 @@ import ProductImage from "./ProductImage";
 import { type Product, type Category, imgUrl } from "@/lib/api";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
+// <Link> auto-prefixes basePath, but window.location.href does NOT.
+// Read NEXT_PUBLIC_BASE_PATH so raw browser navigations stay correct.
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 function getImg(p: Product) {
   if (!p.image) return PLACEHOLDER_IMG;
@@ -112,7 +115,7 @@ export default function AllProducts({ products, categories, selectedCategoryId }
                 key={p.id}
                 className="group relative flex flex-col overflow-hidden rounded-[18px] border border-[#e7e7e7] bg-paper transition-all hover:shadow-md cursor-pointer"
                 style={{ height: 360, width: 260 }}
-                onClick={() => { window.location.href = `/product/${p.id}`; }}
+                onClick={() => { window.location.href = `${BASE}/product/${p.id}`; }}
               >
                 <div className="flex items-start justify-between px-3 pt-3">
                   <div className="flex items-center gap-1.5">
@@ -164,7 +167,7 @@ export default function AllProducts({ products, categories, selectedCategoryId }
           <div
             key={p.id}
             className="relative flex flex-col overflow-hidden rounded-[18px] border border-[#e7e7e7] bg-paper active:scale-[0.98] transition-transform cursor-pointer"
-            onClick={() => { window.location.href = `/product/${p.id}`; }}
+            onClick={() => { window.location.href = `${BASE}/product/${p.id}`; }}
           >
             <div className="flex items-start justify-between px-3 pt-3">
               <span className="inline-flex h-[22px] items-center gap-0.5 rounded-[6px] bg-chip px-1.5 text-[10px] font-medium text-white">

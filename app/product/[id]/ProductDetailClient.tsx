@@ -20,6 +20,8 @@ import AuthModal from "../../components/AuthModal";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+// <Link> auto-prefixes basePath, but window.location.href does NOT.
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 function resolveImg(path: string): string {
   if (!path) return PLACEHOLDER_IMG;
@@ -261,7 +263,7 @@ export default function ProductDetailClient({
       },
       qty,
     );
-    window.location.href = "/checkout";
+    window.location.href = `${BASE}/checkout`;
   };
 
   const breadcrumbs = [
@@ -643,7 +645,7 @@ export default function ProductDetailClient({
       },
       qty,
     );
-          window.location.href = "/checkout";
+          window.location.href = `${BASE}/checkout`;
         }}
       />
 
