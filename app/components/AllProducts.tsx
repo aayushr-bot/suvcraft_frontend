@@ -1,9 +1,10 @@
 "use client";
 import { useRef } from "react";
 import Link from "next/link";
-import { BoltIcon, ChevronRight, HeartLine, Star, TagIcon } from "./icons";
+import { BoltIcon, ChevronRight, HeartFill, HeartLine, Star, TagIcon } from "./icons";
 import ProductImage from "./ProductImage";
 import { type Product, type Category, imgUrl } from "@/lib/api";
+import { useWishlist } from "@/lib/wishlistContext";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 // <Link> auto-prefixes basePath, but window.location.href does NOT.
@@ -35,6 +36,22 @@ const CARD_WIDTH = 260 + 16;
 export default function AllProducts({ products, categories, selectedCategoryId }: { products: Product[]; categories: Category[]; selectedCategoryId?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef(0);
+  const wishlist = useWishlist();
+
+  const toggleFav = (e: React.MouseEvent, p: Product) => {
+    // Don't navigate when the heart is clicked.
+    e.stopPropagation();
+    e.preventDefault();
+    wishlist.toggle({
+      id: p.id,
+      name: p.name,
+      image: p.image,
+      slug: p.slug,
+      price: Number(p.special_price ?? 0) || Number(p.price ?? 0),
+      list_price: Number(p.price ?? 0) || undefined,
+      status: p.status,
+    });
+  };
 
   const isAllActive = !selectedCategoryId;
 
@@ -128,9 +145,17 @@ export default function AllProducts({ products, categories, selectedCategoryId }
                       Bestseller
                     </span>
                   </div>
-                  <span aria-label="Favorite" className="relative z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-paper text-ink ring-1 ring-[#e7e7e7]">
-                    <HeartLine className="h-3.5 w-3.5 text-ink" />
-                  </span>
+                  <button
+                    type="button"
+                    aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
+                    aria-pressed={wishlist.has(p.id)}
+                    onClick={(e) => toggleFav(e, p)}
+                    className="relative z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-paper ring-1 ring-[#e7e7e7] hover:ring-ink transition-all"
+                  >
+                    {wishlist.has(p.id)
+                      ? <HeartFill className="h-3.5 w-3.5 text-red-500" />
+                      : <HeartLine className="h-3.5 w-3.5 text-ink" />}
+                  </button>
                 </div>
 
                 <div className="relative flex flex-1 items-center justify-center px-4 pb-3 pt-2">
@@ -173,9 +198,17 @@ export default function AllProducts({ products, categories, selectedCategoryId }
               <span className="inline-flex h-[22px] items-center gap-0.5 rounded-[6px] bg-chip px-1.5 text-[10px] font-medium text-white">
                 <TagIcon className="h-2.5 w-2.5" />Offer
               </span>
-              <span aria-label="Favorite" className="relative z-10 flex h-[24px] w-[24px] items-center justify-center rounded-full bg-paper text-ink ring-1 ring-[#e7e7e7]">
-                <HeartLine className="h-3 w-3 text-ink" />
-              </span>
+              <button
+                type="button"
+                aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
+                aria-pressed={wishlist.has(p.id)}
+                onClick={(e) => toggleFav(e, p)}
+                className="relative z-10 flex h-[24px] w-[24px] items-center justify-center rounded-full bg-paper ring-1 ring-[#e7e7e7] hover:ring-ink transition-all"
+              >
+                {wishlist.has(p.id)
+                  ? <HeartFill className="h-3 w-3 text-red-500" />
+                  : <HeartLine className="h-3 w-3 text-ink" />}
+              </button>
             </div>
             <div className="flex items-center justify-center px-3 py-2">
               <ProductImage src={getImg(p)} alt={p.name} className="h-[130px] w-full object-contain" />

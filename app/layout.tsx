@@ -5,6 +5,7 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { api } from "@/lib/api";
 import { CartProvider } from "@/lib/cartContext";
+import { WishlistProvider } from "@/lib/wishlistContext";
 
 const instrumentSans = Instrument_Sans({
   variable: "--font-instrument-sans",
@@ -49,9 +50,11 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <CartProvider>
-          <Navbar categories={navCategories} />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <WishlistProvider>
+            <Navbar categories={navCategories} />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </WishlistProvider>
         </CartProvider>
       </body>
     </html>

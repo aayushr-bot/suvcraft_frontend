@@ -19,7 +19,7 @@ const METHODS = [
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { items, total, count, clearCart } = useCart();
+  const { items, total, count, clearCart, taxTotal, deliveryCharge, coupon, couponDiscount, finalTotal, removeCoupon } = useCart();
   const [method, setMethod] = useState("cod");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -65,17 +65,20 @@ export default function PaymentPage() {
           address: address.address,
           city: address.city,
           state: address.state,
-          zip: address.zip,
+          zip: address.pincode || address.zip,
           payment_method: method,
           items: items.map((i) => ({ id: i.id, name: i.name, image: i.image, price: i.price, qty: i.qty })),
+          promo_code: coupon?.code || undefined,
         }),
       });
       const json = await res.json();
       if (json.error) { setError(json.message || "Order failed."); return; }
 
       clearCart();
+      removeCoupon();
       try { sessionStorage.removeItem("suvcraft_address"); } catch {}
-      router.push(`/payment-success?id=${json.data.orderId}&total=${json.data.total}`);
+      const finalT = json.data.final_total ?? json.data.total;
+      router.push(`/payment-success?id=${json.data.orderId}&total=${finalT}`);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -230,12 +233,26 @@ export default function PaymentPage() {
               </div>
               <div className="flex justify-between text-[16px]">
                 <span className="text-ink">Delivery</span>
-                <span className="font-medium text-green-600">Free</span>
+                <span className={`font-medium ${deliveryCharge === 0 ? "text-green-600" : "text-[#525151]"}`}>
+                  {deliveryCharge === 0 ? "Free" : fmt(deliveryCharge)}
+                </span>
               </div>
+              {coupon && couponDiscount > 0 && (
+                <div className="flex justify-between text-[15px]">
+                  <span className="text-green-700 font-medium">Coupon ({coupon.code})</span>
+                  <span className="font-semibold text-green-700">−{fmt(couponDiscount)}</span>
+                </div>
+              )}
+              {taxTotal > 0 && (
+                <div className="flex justify-between text-[15px]">
+                  <span className="text-ink">Tax</span>
+                  <span className="font-medium text-[#525151]">+{fmt(taxTotal)}</span>
+                </div>
+              )}
               <hr className="border-[#eeeeee]" />
               <div className="flex justify-between text-[18px] font-bold">
                 <span className="text-ink">Total</span>
-                <span className="text-ink">{fmt(total)}</span>
+                <span className="text-ink">{fmt(finalTotal)}</span>
               </div>
             </div>
 

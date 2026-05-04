@@ -12,13 +12,15 @@ import {
   BanIcon,
   HeadsetIcon,
   LogOutIcon,
-  ChevronRight
+  ChevronRight,
+  HeartLine
 } from "./icons";
 import Modal from "./Modal";
 import AuthModal from "./AuthModal";
 import ContactModal from "./ContactModal";
 import { type Category } from "@/lib/api";
 import { useCart } from "@/lib/cartContext";
+import { useWishlist } from "@/lib/wishlistContext";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const SHOP_LINK = { id: 0, label: "Shop", href: "/", slug: "shop" };
@@ -70,6 +72,7 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const { count: cartCount } = useCart();
+  const { count: wishlistCount } = useWishlist();
 
   function handleSearch() {
     const q = searchQuery.trim();
@@ -217,6 +220,18 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
             <UserIcon className="h-5 w-5" strokeWidth={1.3} />
           </button>
           <Link
+            href="/wishlist"
+            aria-label="Wishlist"
+            className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5 md:h-[44px] md:w-[44px]"
+          >
+            <HeartLine className="h-5 w-5" />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                {wishlistCount > 99 ? "99+" : wishlistCount}
+              </span>
+            )}
+          </Link>
+          <Link
             href="/cart"
             aria-label="Cart"
             className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5 md:h-[44px] md:w-[44px]"
@@ -245,6 +260,14 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
               <SearchIcon className="h-4 w-4 text-ink-soft" />
             </button>
           </label>
+          <Link href="/wishlist" aria-label="Wishlist" className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5">
+            <HeartLine className="h-5 w-5" />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                {wishlistCount > 99 ? "99+" : wishlistCount}
+              </span>
+            )}
+          </Link>
           <Link href="/cart" aria-label="Cart" className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5">
             <CartIcon className="h-5 w-5" strokeWidth={1.5} />
             {cartCount > 0 && (

@@ -24,6 +24,8 @@ export type Product = {
   brand_name: string;
   price?: number;
   special_price?: number;
+  tax_percentage?: number;
+  is_prices_inclusive_tax?: number;
 };
 
 export type ProductDetail = Product & {
@@ -37,6 +39,8 @@ export type ProductDetail = Product & {
   minimum_order_quantity?: number | null;
   total_allowed_quantity?: number | null;
   quantity_step_size?: number | null;
+  tax_percentage?: number;
+  is_prices_inclusive_tax?: number;
 };
 
 export type Category = {

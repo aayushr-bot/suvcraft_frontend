@@ -56,7 +56,7 @@ function fromAddress(a: Address): FormState {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, total, count } = useCart();
+  const { items, total, count, taxTotal, deliveryCharge, coupon, couponDiscount, finalTotal } = useCart();
 
   const [authChecked, setAuthChecked] = useState(false);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -341,12 +341,26 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-ink">Delivery Charge</span>
-                  <span className="text-green-600 font-medium">FREE</span>
+                  <span className={`font-medium ${deliveryCharge === 0 ? "text-green-600" : "text-[#525151]"}`}>
+                    {deliveryCharge === 0 ? "FREE" : fmt(deliveryCharge)}
+                  </span>
                 </div>
+                {coupon && couponDiscount > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-green-700 font-medium">Coupon ({coupon.code})</span>
+                    <span className="text-green-700 font-semibold">−{fmt(couponDiscount)}</span>
+                  </div>
+                )}
+                {taxTotal > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-ink">Tax</span>
+                    <span className="text-[#525151] font-medium">+{fmt(taxTotal)}</span>
+                  </div>
+                )}
                 <hr className="my-1 border-dashed border-[#e7e7e7]" />
                 <div className="flex justify-between text-[16px] font-bold">
                   <span className="text-ink">Total Amount</span>
-                  <span className="text-ink">{fmt(total)}</span>
+                  <span className="text-ink">{fmt(finalTotal)}</span>
                 </div>
               </div>
             </div>

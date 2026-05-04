@@ -15,6 +15,7 @@ import {
 } from "../../components/icons";
 import { type ProductDetail, type Product, type ProductRating, type RatingSummary, imgUrl } from "@/lib/api";
 import { useCart } from "@/lib/cartContext";
+import { useWishlist } from "@/lib/wishlistContext";
 import ProductImage from "../../components/ProductImage";
 import AuthModal from "../../components/AuthModal";
 
@@ -116,8 +117,10 @@ export default function ProductDetailClient({
   const [popupMsg, setPopupMsg] = useState("Product added to cart.");
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
   const [showAuth, setShowAuth] = useState(false);
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [qtyError, setQtyError] = useState("");
+
+  const wishlist = useWishlist();
+  const isWishlisted = wishlist.has(product.id);
 
   useEffect(() => {
     fetch(`${API}/api/v1/auth/me`, { credentials: "include" })
@@ -125,14 +128,6 @@ export default function ProductDetailClient({
       .then((j) => setIsAuthed(Boolean(j?.data?.user)))
       .catch(() => setIsAuthed(false));
   }, []);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("wishlist");
-      const ids: number[] = raw ? JSON.parse(raw) : [];
-      setIsWishlisted(ids.includes(product.id));
-    } catch {}
-  }, [product.id]);
 
   const showToast = (msg: string) => {
     setPopupMsg(msg);
@@ -171,6 +166,8 @@ export default function ProductDetailClient({
         maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
         step: stepSize,
         stock: product.stock,
+        tax_percentage: Number(product.tax_percentage || 0),
+        is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
       },
       qty,
     );
@@ -214,19 +211,19 @@ export default function ProductDetailClient({
     }
   };
 
-  const handleWishlist = () => {
-    if (!isAuthed) {
-      setShowAuth(true);
-      return;
-    }
+  const handleWishlist = async () => {
+    const wasWishlisted = isWishlisted;
     try {
-      const raw = localStorage.getItem("wishlist");
-      const ids: number[] = raw ? JSON.parse(raw) : [];
-      const next = ids.includes(product.id) ? ids.filter((i) => i !== product.id) : [...ids, product.id];
-      localStorage.setItem("wishlist", JSON.stringify(next));
-      const added = next.includes(product.id);
-      setIsWishlisted(added);
-      showToast(added ? "Added to wishlist." : "Removed from wishlist.");
+      await wishlist.toggle({
+        id: product.id,
+        name: product.name,
+        image: product.image || images[0],
+        slug: product.slug,
+        price: current,
+        list_price: original || undefined,
+        status: product.status,
+      });
+      showToast(wasWishlisted ? "Removed from wishlist." : "Added to wishlist.");
     } catch {
       showToast("Could not update wishlist.");
     }
@@ -260,6 +257,8 @@ export default function ProductDetailClient({
         maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
         step: stepSize,
         stock: product.stock,
+        tax_percentage: Number(product.tax_percentage || 0),
+        is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
       },
       qty,
     );
@@ -642,6 +641,8 @@ export default function ProductDetailClient({
         maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
         step: stepSize,
         stock: product.stock,
+        tax_percentage: Number(product.tax_percentage || 0),
+        is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
       },
       qty,
     );

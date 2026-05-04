@@ -43,7 +43,10 @@ function formatDeliveryDate(daysFromNow: number) {
 }
 
 export default function CartPage() {
-  const { items, removeFromCart, updateQty, updateLimits, total, count } = useCart();
+  const { items, saved, removeFromCart, updateQty, updateLimits, moveToSaved, moveToCart, removeFromSaved, total, count, taxTotal, deliveryCharge, freeDeliveryThreshold, coupon, couponDiscount, finalTotal, applyCoupon, removeCoupon } = useCart();
+  const [couponInput, setCouponInput] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponError, setCouponError] = useState("");
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -112,6 +115,8 @@ export default function CartPage() {
             maxQty: Number.isFinite(maxQ) ? maxQ : undefined,
             step: stepQ,
             stock: p.stock,
+            tax_percentage: Number(p.tax_percentage || 0),
+            is_prices_inclusive_tax: Number(p.is_prices_inclusive_tax || 0),
           });
           if (Number.isFinite(maxQ) && item.qty > maxQ) {
             if (maxQ < minQ) {
@@ -167,6 +172,18 @@ export default function CartPage() {
     else setAuthOpen(true);
   }
 
+  async function handleApplyCoupon() {
+    setCouponError("");
+    setCouponBusy(true);
+    const r = await applyCoupon(couponInput);
+    setCouponBusy(false);
+    if (!r.ok) {
+      setCouponError(r.error || "Could not apply coupon.");
+      return;
+    }
+    setCouponInput("");
+  }
+
   function applyPincode() {
     const p = pinInput.replace(/\D/g, "");
     if (!/^\d{6}$/.test(p)) { setPinError("Enter a valid 6-digit pincode."); return; }
@@ -177,7 +194,7 @@ export default function CartPage() {
     ? { from: formatDeliveryDate(serviceInfo.delivery_min_days), to: formatDeliveryDate(serviceInfo.delivery_max_days) }
     : null;
 
-  if (items.length === 0) {
+  if (items.length === 0 && saved.length === 0) {
     return (
       <div className="w-full bg-white min-h-screen">
         <div className="mx-auto w-full max-w-[1440px] px-4 py-20 md:px-8 flex flex-col items-center justify-center gap-6">
@@ -265,6 +282,7 @@ export default function CartPage() {
             {pinError && <p className="mt-2 text-[12px] font-medium text-red-600">{pinError}</p>}
           </div>
 
+          {items.length > 0 && (
           <div className="rounded-[20px] border-2 border-dashed border-[#e7e7e7] p-6">
             <div className="flex items-baseline gap-2">
               <h1 className="text-[20px] font-bold text-ink">Shopping Bag</h1>
@@ -311,6 +329,14 @@ export default function CartPage() {
                       <div className="text-[14px] text-ink font-medium">
                         Unit Price : <span className="font-bold">{fmt(item.price)}</span>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => moveToSaved(item.id)}
+                        className="self-start text-[12px] font-semibold text-[#525151] hover:text-brand-purple hover:underline transition-colors"
+                      >
+                        Save for later
+                      </button>
                     </div>
 
                     <div className="flex flex-col items-end justify-between py-1">
@@ -330,11 +356,107 @@ export default function CartPage() {
               ))}
             </div>
           </div>
+          )}
+
+          {saved.length > 0 && (
+          <div className={`rounded-[20px] border-2 border-dashed border-[#e7e7e7] p-6 ${items.length > 0 ? "mt-6" : ""}`}>
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-[20px] font-bold text-ink">Saved for later</h2>
+              <span className="text-[12px] text-[#8c8c8c]">{saved.length} {saved.length === 1 ? "item" : "items"}</span>
+            </div>
+            <hr className="mt-4 mb-8 border-dashed border-[#e7e7e7]" />
+
+            <div className="flex flex-col gap-8">
+              {saved.map((item, index) => (
+                <div key={item.id} className="relative bg-white">
+                  <div className="flex gap-6">
+                    <Link href={`/product/${item.id}`} className="h-[110px] w-[110px] shrink-0 flex items-center justify-center rounded-[12px] border border-[#e7e7e7] bg-[#f9f9f9] overflow-hidden">
+                      <ProductImage src={resolveImg(item.image)} alt={item.name} className="h-full w-full object-contain p-2" />
+                    </Link>
+
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Link href={`/product/${item.id}`} className="text-[15px] font-semibold text-ink hover:underline line-clamp-2">
+                        {item.name}
+                      </Link>
+                      <div className="text-[14px] text-ink font-medium">
+                        Price : <span className="font-bold">{fmt(item.price)}</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => moveToCart(item.id)}
+                          className="h-[36px] rounded-[8px] bg-ink px-4 text-[12px] font-bold text-white hover:bg-black transition-colors"
+                        >
+                          Move to cart
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFromSaved(item.id)}
+                          className="h-[36px] rounded-[8px] border border-[#cfcfcf] px-4 text-[12px] font-semibold text-[#525151] hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {index < saved.length - 1 && <hr className="mt-8 border-dashed border-[#e7e7e7]" />}
+                </div>
+              ))}
+            </div>
+          </div>
+          )}
         </div>
 
         {/* Sidebar Summary */}
         <div className="w-full lg:w-[380px]">
           <div className="flex flex-col gap-6">
+            {/* Coupon */}
+            {items.length > 0 && (
+            <div className="rounded-[15px] border-2 border-dashed border-[#e7e7e7] bg-white p-6">
+              <h3 className="text-[14px] font-bold text-ink mb-3">Apply Coupon</h3>
+              {coupon ? (
+                <div className="rounded-[10px] bg-green-50 border border-green-200 p-3 flex items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-bold text-green-800">{coupon.code} applied</span>
+                    {coupon.message && <span className="text-[11px] text-green-700">{coupon.message}</span>}
+                    <span className="text-[12px] font-semibold text-green-800 mt-1">You saved {fmt(couponDiscount)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    aria-label="Remove coupon"
+                    className="h-[28px] w-[28px] flex items-center justify-center rounded-full text-green-700 hover:bg-green-100 transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponInput}
+                      onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(""); }}
+                      onKeyDown={(e) => e.key === "Enter" && !couponBusy && handleApplyCoupon()}
+                      placeholder="Enter coupon code"
+                      className="h-[42px] flex-1 rounded-[10px] border border-[#d4d4d4] px-3 text-[13px] outline-none focus:border-ink uppercase"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponBusy || !couponInput.trim()}
+                      className="h-[42px] rounded-[10px] bg-ink px-5 text-[12px] font-bold text-white hover:bg-black transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {couponBusy ? "..." : "APPLY"}
+                    </button>
+                  </div>
+                  {couponError && <p className="mt-2 text-[12px] font-medium text-red-600">{couponError}</p>}
+                </>
+              )}
+            </div>
+            )}
+
             {/* Price Summary */}
             <div className="rounded-[15px] border-2 border-dashed border-[#e7e7e7] bg-white p-6">
               <h3 className="text-[16px] font-bold text-ink mb-6">Price Summary ({count} {count === 1 ? "item" : "items"})</h3>
@@ -346,21 +468,41 @@ export default function CartPage() {
                 </div>
                 <div className="flex justify-between text-[16px]">
                   <span className="text-ink">Delivery Charge</span>
-                  <span className="font-medium text-green-600">Free</span>
+                  <span className={`font-medium ${deliveryCharge === 0 ? "text-green-600" : "text-[#525151]"}`}>
+                    {deliveryCharge === 0 ? "Free" : fmt(deliveryCharge)}
+                  </span>
                 </div>
+                {deliveryCharge > 0 && freeDeliveryThreshold > 0 && (
+                  <p className="-mt-3 text-[11px] text-[#878787]">
+                    Add {fmt(freeDeliveryThreshold - total)} more to get FREE delivery.
+                  </p>
+                )}
+                {coupon && couponDiscount > 0 && (
+                  <div className="flex justify-between text-[15px]">
+                    <span className="text-green-700 font-medium">Coupon ({coupon.code})</span>
+                    <span className="font-semibold text-green-700">−{fmt(couponDiscount)}</span>
+                  </div>
+                )}
+                {taxTotal > 0 && (
+                  <div className="flex justify-between text-[15px]">
+                    <span className="text-ink">Tax</span>
+                    <span className="font-medium text-[#525151]">+{fmt(taxTotal)}</span>
+                  </div>
+                )}
 
                 <hr className="my-2 border-[#eeeeee]" />
 
                 <div className="flex justify-between text-[18px] font-bold">
                   <span className="text-ink">Total</span>
-                  <span className="text-ink">{fmt(total)}</span>
+                  <span className="text-ink">{fmt(finalTotal)}</span>
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={handleCheckout}
-                className="flex h-[58px] w-full items-center justify-center rounded-[10px] bg-[#1c1c1c] text-[16px] font-bold text-white hover:bg-black transition-all mt-8"
+                disabled={items.length === 0}
+                className="flex h-[58px] w-full items-center justify-center rounded-[10px] bg-[#1c1c1c] text-[16px] font-bold text-white hover:bg-black transition-all mt-8 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#1c1c1c]"
               >
                 Check Out Now
               </button>
