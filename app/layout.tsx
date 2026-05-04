@@ -3,9 +3,16 @@ import { Instrument_Sans, Harmattan, Bruno_Ace_SC } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import { api } from "@/lib/api";
+import { api, imgUrl, type SiteSettings } from "@/lib/api";
 import { CartProvider } from "@/lib/cartContext";
 import { WishlistProvider } from "@/lib/wishlistContext";
+
+function resolveAsset(path?: string): string {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const clean = path.startsWith("/uploads/") ? path.slice("/uploads/".length) : path.replace(/^\//, "");
+  return imgUrl(clean);
+}
 
 const instrumentSans = Instrument_Sans({
   variable: "--font-instrument-sans",
@@ -25,23 +32,34 @@ const brunoAceSC = Bruno_Ace_SC({
   weight: ["400"],
 });
 
-export const metadata: Metadata = {
-  title: "SUVCRAFT",
-  description: "Access to high-quality, eco-friendly products and services",
-  icons: {
-    icon: "/figma/suvcraft-logo.png",
-    shortcut: "/figma/suvcraft-logo.png",
-    apple: "/figma/suvcraft-logo.png",
-  },
-};
+// Build metadata from admin-managed settings on every request (Next.js 16 will cache
+// the result via the page's revalidation strategy).
+export async function generateMetadata(): Promise<Metadata> {
+  let s: SiteSettings = {};
+  try { s = (await api.settings()) as SiteSettings; } catch {}
+  // Only set icon when admin has uploaded one — let the browser use its default otherwise.
+  const favicon = resolveAsset(s.favicon);
+  const meta: Metadata = {
+    title: s.site_title || "SUVCRAFT",
+    description: s.meta_description || s.app_short_description || "",
+    keywords: s.meta_keywords || undefined,
+  };
+  if (favicon) meta.icons = { icon: favicon, shortcut: favicon, apple: favicon };
+  return meta;
+}
 
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const categoriesData = await api.categories().catch(() => null);
+  const [categoriesData, navSettings] = await Promise.all([
+    api.categories().catch(() => null),
+    api.settings().catch(() => null),
+  ]);
   const navCategories = categoriesData?.rows ?? [];
+  const headerLogo = (navSettings as SiteSettings | null)?.logo || "";
+  const siteTitle = (navSettings as SiteSettings | null)?.site_title || "SUVCRAFT";
 
   return (
     <html
@@ -51,7 +69,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <CartProvider>
           <WishlistProvider>
-            <Navbar categories={navCategories} />
+            <Navbar categories={navCategories} logo={headerLogo} siteTitle={siteTitle} />
             <main className="flex-1">{children}</main>
             <Footer />
           </WishlistProvider>

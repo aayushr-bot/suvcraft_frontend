@@ -137,6 +137,47 @@ export type SiteSettings = {
   footer_playstore?: string;
   footer_appstore?: string;
   footer_copyright?: string;
+  // Web General (admin Settings → General)
+  site_title?: string;
+  support_number?: string;
+  support_email?: string;
+  copyright_details?: string;
+  address?: string;
+  app_short_description?: string;
+  map_iframe?: string;
+  meta_keywords?: string;
+  meta_description?: string;
+  modern_theme_color?: string;
+  footer_logo?: string;
+  favicon?: string;
+  // App download promo (admin Settings → App download Section)
+  app_download_section?: string | number;
+  app_download_section_title?: string;
+  app_download_section_tagline?: string;
+  app_download_section_short_description?: string;
+  app_download_section_playstore_url?: string;
+  app_download_section_appstore_url?: string;
+  // Social media — admin Settings → Social Media Links is now a dynamic list
+  // of { image, url, label } entries. Old individual link fields kept for
+  // back-compat with any existing storefront installs.
+  social_links?: { image?: string; url?: string; label?: string }[];
+  twitter_link?: string;
+  facebook_link?: string;
+  instagram_link?: string;
+  youtube_link?: string;
+  // Feature Section (Shipping / Return / Support / Safety strip)
+  shipping_mode?: string | number;
+  shipping_title?: string;
+  shipping_description?: string;
+  return_mode?: string | number;
+  return_title?: string;
+  return_description?: string;
+  support_mode?: string | number;
+  support_title?: string;
+  support_description?: string;
+  safety_security_mode?: string | number;
+  safety_security_title?: string;
+  safety_security_description?: string;
 };
 
 export type ProductRating = {

@@ -18,7 +18,16 @@ import {
 import Modal from "./Modal";
 import AuthModal from "./AuthModal";
 import ContactModal from "./ContactModal";
-import { type Category } from "@/lib/api";
+import { type Category, imgUrl } from "@/lib/api";
+
+// Resolve an admin-uploaded logo. Returns "" when admin hasn't uploaded one
+// (caller should hide the <img> rather than render a broken placeholder).
+function resolveLogo(path?: string): string {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const clean = path.startsWith("/uploads/") ? path.slice("/uploads/".length) : path.replace(/^\//, "");
+  return imgUrl(clean);
+}
 import { useCart } from "@/lib/cartContext";
 import { useWishlist } from "@/lib/wishlistContext";
 
@@ -40,7 +49,9 @@ function pickDisplayName(user: User): { label: string; isMobile: boolean } {
   return { label: "Account", isMobile: false };
 }
 
-export default function Navbar(props: { categories?: Category[] }) {
+type NavbarProps = { categories?: Category[]; logo?: string; siteTitle?: string };
+
+export default function Navbar(props: NavbarProps) {
   return (
     <Suspense fallback={<NavbarInner {...props} activeCategoryId={-1} />}>
       <NavbarWithSearchParams {...props} />
@@ -48,15 +59,17 @@ export default function Navbar(props: { categories?: Category[] }) {
   );
 }
 
-function NavbarWithSearchParams({ categories = [] }: { categories?: Category[] }) {
+function NavbarWithSearchParams(props: NavbarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isHome = pathname === "/";
   const cid = isHome ? Number(searchParams.get("category_id") || 0) : -1;
-  return <NavbarInner categories={categories} activeCategoryId={cid} />;
+  return <NavbarInner {...props} activeCategoryId={cid} />;
 }
 
-function NavbarInner({ categories = [], activeCategoryId }: { categories?: Category[]; activeCategoryId: number }) {
+function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: NavbarProps & { activeCategoryId: number }) {
+  const headerLogo = resolveLogo(logo);
+  const brand = siteTitle || "SUVCRAFT";
   const navLinks = [
     SHOP_LINK,
     ...categories.map((c) => ({ id: c.id, label: c.name, href: `/?category_id=${c.id}`, slug: c.slug })),
@@ -106,10 +119,14 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
         <div className="mx-auto w-full max-w-[1440px] px-4 py-6 md:px-8">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <img src="/figma/suvcraft-logo.png" alt="SUVCRAFT" className="h-[42px] w-auto md:h-[52px]" />
-              <span className="font-bruno text-[18px] font-bold leading-none text-brand-purple md:text-[24px]" style={{ letterSpacing: "0.08em" }}>
-                SUVCRAFT
-              </span>
+              {headerLogo ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={headerLogo} alt={brand} className="h-[42px] w-auto md:h-[52px]" />
+              ) : (
+                <span className="font-bruno text-[18px] font-bold leading-none text-brand-purple md:text-[24px]" style={{ letterSpacing: "0.08em" }}>
+                  {brand}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => setIsContactOpen(true)}
@@ -130,10 +147,14 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
       <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 md:px-8 md:pt-6">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">
-            <img src="/figma/suvcraft-logo.png" alt="SUVCRAFT" className="h-[42px] w-auto md:h-[52px]" />
-            <span className="font-bruno text-[18px] font-bold leading-none text-brand-purple md:text-[24px]" style={{ letterSpacing: "0.08em" }}>
-              SUVCRAFT
-            </span>
+            {headerLogo ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={headerLogo} alt={brand} className="h-[42px] w-auto md:h-[52px]" />
+            ) : (
+              <span className="font-bruno text-[18px] font-bold leading-none text-brand-purple md:text-[24px]" style={{ letterSpacing: "0.08em" }}>
+                {brand}
+              </span>
+            )}
           </Link>
 
           <div className="flex items-center gap-2 md:gap-3">
