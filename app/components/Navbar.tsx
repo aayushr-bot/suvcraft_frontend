@@ -178,18 +178,21 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
         <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
 
         {/* Desktop + tablet category rail */}
-        <div className="mt-4 hidden h-auto min-h-[56px] flex-wrap items-center gap-3 rounded-[15px] border-y border-[#d4d4d4] px-4 py-2 md:flex md:h-[64px] md:flex-nowrap md:gap-5 md:px-6 md:py-0">
-          <nav className="flex flex-wrap items-center gap-4 text-[13px] md:gap-7 md:text-[15px]">
+        <div className="mt-4 hidden h-[64px] items-center gap-4 rounded-[15px] border-y border-[#d4d4d4] px-6 md:flex">
+          <nav
+            className="flex flex-1 min-w-0 items-center gap-5 overflow-x-auto whitespace-nowrap text-[14px] lg:gap-7 lg:text-[15px]"
+            style={{ scrollbarWidth: "none" }}
+          >
             {navLinks.map((c) => {
               const isActive = c.id === activeCategoryId;
               return (
                 <Link
                   key={c.slug}
                   href={c.href}
-                  className={isActive
+                  className={`shrink-0 ${isActive
                     ? "font-semibold text-ink"
                     : "font-normal text-[#6b6b6b] hover:text-ink"
-                  }
+                  }`}
                 >
                   {c.label}
                 </Link>
@@ -197,7 +200,7 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
             })}
           </nav>
 
-          <label className="ml-0 flex h-[38px] flex-1 items-center gap-2 rounded-[45px] bg-paper px-4 shadow-sm md:ml-3 md:h-[44px] md:px-5">
+          <label className="flex h-[40px] w-[200px] shrink-0 items-center gap-2 rounded-[45px] bg-paper px-4 shadow-sm lg:w-[260px] lg:h-[44px] lg:px-5">
             <input
               type="search"
               placeholder="Search Product"
@@ -211,14 +214,6 @@ function NavbarInner({ categories = [], activeCategoryId }: { categories?: Categ
             </button>
           </label>
 
-          <button
-            onClick={openAccount}
-            type="button"
-            aria-label={user ? "Account" : "Sign in"}
-            className="flex h-[38px] w-[38px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5 md:h-[44px] md:w-[44px]"
-          >
-            <UserIcon className="h-5 w-5" strokeWidth={1.3} />
-          </button>
           <Link
             href="/wishlist"
             aria-label="Wishlist"
