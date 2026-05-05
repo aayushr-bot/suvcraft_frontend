@@ -10,14 +10,21 @@ import TopSelling from "./components/TopSelling";
 export default async function Home({
   searchParams,
 }: {
-  searchParams?: Promise<{ category_id?: string }>;
+  searchParams?: Promise<{ category_id?: string; type?: string }>;
 }) {
   const resolved = await searchParams;
   const categoryId = resolved?.category_id;
+  const typeSlug = resolved?.type;
 
-  const [productsData, categoriesData, slidersData, settingsData, collectionsData] = await Promise.allSettled([
-    api.products({ per_page: 20, status: "1", ...(categoryId ? { category_id: categoryId } : {}) }),
+  const [productsData, categoriesData, categoryTabsData, slidersData, settingsData, collectionsData] = await Promise.allSettled([
+    api.products({
+      per_page: 20,
+      status: "1",
+      ...(categoryId ? { category_id: categoryId } : {}),
+      ...(typeSlug ? { type: typeSlug } : {}),
+    }),
     api.categories(),
+    api.categoryTabs(categoryId ? { category_id: categoryId } : undefined),
     api.sliders({ type: "hero" }),
     api.settings(),
     api.collections(),
@@ -25,6 +32,7 @@ export default async function Home({
 
   const products = productsData.status === "fulfilled" ? productsData.value.rows : [];
   const categories = categoriesData.status === "fulfilled" ? categoriesData.value.rows : [];
+  const categoryTabs = categoryTabsData.status === "fulfilled" ? categoryTabsData.value.rows : [];
   const sliders = slidersData.status === "fulfilled" ? slidersData.value.rows : [];
   const settings = settingsData.status === "fulfilled" ? settingsData.value : {};
   const collections = collectionsData.status === "fulfilled" ? collectionsData.value.rows : [];
@@ -50,7 +58,9 @@ export default async function Home({
       <AllProducts
         products={products}
         categories={categories}
+        categoryTabs={categoryTabs}
         selectedCategoryId={categoryId ? Number(categoryId) : undefined}
+        selectedTypeSlug={typeSlug}
       />
     </>
   );

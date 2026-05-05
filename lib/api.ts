@@ -51,6 +51,16 @@ export type Category = {
   page_url?: string;
 };
 
+export type CategoryTab = {
+  id: number;
+  slug: string;
+  label: string;
+  status: number;
+  row_order: number;
+  category_id: number;
+  category_name?: string;
+};
+
 export type Slider = {
   id: number;
   type: string;
@@ -211,6 +221,9 @@ export const api = {
 
   categories: () =>
     get<Paginated<Category>>('/categories', { per_page: 100, status: '1' }),
+
+  categoryTabs: (params?: Record<string, string | number>) =>
+    get<{ rows: CategoryTab[] }>('/category-tabs', params),
 
   sliders: (params?: Record<string, string | number>) =>
     get<Paginated<Slider>>('/sliders', params),

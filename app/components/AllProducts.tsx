@@ -3,7 +3,7 @@ import { useRef } from "react";
 import Link from "next/link";
 import { BoltIcon, ChevronRight, HeartFill, HeartLine, Star, TagIcon } from "./icons";
 import ProductImage from "./ProductImage";
-import { type Product, type Category, imgUrl } from "@/lib/api";
+import { type Product, type Category, type CategoryTab, imgUrl } from "@/lib/api";
 import { useWishlist } from "@/lib/wishlistContext";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -33,7 +33,19 @@ function getPrice(p: Product) {
 const swatches = ["#d64545", "#245cbf", "#e5b83a"];
 const CARD_WIDTH = 260 + 16;
 
-export default function AllProducts({ products, categories, selectedCategoryId }: { products: Product[]; categories: Category[]; selectedCategoryId?: number }) {
+export default function AllProducts({
+  products,
+  categories,
+  categoryTabs = [],
+  selectedCategoryId,
+  selectedTypeSlug,
+}: {
+  products: Product[];
+  categories: Category[];
+  categoryTabs?: CategoryTab[];
+  selectedCategoryId?: number;
+  selectedTypeSlug?: string;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef(0);
   const wishlist = useWishlist();
@@ -53,7 +65,17 @@ export default function AllProducts({ products, categories, selectedCategoryId }
     });
   };
 
-  const isAllActive = !selectedCategoryId;
+  // Pills filter by category tab. Category itself is set via the navbar
+  // (?category_id=…), and the two compose — clicking a tab keeps the active
+  // category in the URL.
+  const isAllTabsActive = !selectedTypeSlug;
+  const baseQuery = selectedCategoryId ? `category_id=${selectedCategoryId}` : "";
+  const buildHref = (tabSlug?: string) => {
+    const params = new URLSearchParams(baseQuery);
+    if (tabSlug) params.set("type", tabSlug);
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  };
 
   function scroll(dir: -1 | 1) {
     const container = containerRef.current;
@@ -80,26 +102,28 @@ export default function AllProducts({ products, categories, selectedCategoryId }
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <Link
-          href="/"
-          className={isAllActive
+          href={buildHref()}
+          scroll={false}
+          className={isAllTabsActive
             ? "inline-flex h-[40px] items-center justify-center rounded-full border-[1.5px] border-ink px-7 text-[13px] font-semibold text-ink"
             : "inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-7 text-[13px] font-normal text-[#525151] hover:bg-black/5"
           }
         >
           All
         </Link>
-        {categories.map((c) => {
-          const isActive = selectedCategoryId === c.id;
+        {categoryTabs.map((t) => {
+          const isActive = selectedTypeSlug === t.slug;
           return (
             <Link
-              key={c.id}
-              href={`/?category_id=${c.id}`}
+              key={t.slug}
+              href={buildHref(t.slug)}
+              scroll={false}
               className={isActive
                 ? "inline-flex h-[40px] items-center justify-center rounded-full border-[1.5px] border-ink px-7 text-[13px] font-semibold text-ink"
                 : "inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-7 text-[13px] font-normal text-[#525151] hover:bg-black/5"
               }
             >
-              {c.name}
+              {t.label}
             </Link>
           );
         })}
