@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, HeartFill, HeartLine } from "./icons";
+import { ArrowRight, ChevronRight, HeartFill, HeartLine } from "./icons";
 import { type Slider, imgUrl } from "@/lib/api";
 
 function heroImg(path: string) {
@@ -103,49 +103,121 @@ function SliderCard({ s }: { s: Slider }) {
   ) : card;
 }
 
+const VISIBLE_COUNT = 3;
+
 export default function HeroSlider({ sliders }: { sliders: Slider[] }) {
   const [offset, setOffset] = useState(0);
 
-  const visible = sliders.slice(offset, offset + 3);
-  const hasNext = offset + 3 < sliders.length;
+  // Pages advance in fixed steps of VISIBLE_COUNT. With 4 sliders that's
+  // [1,2,3] then [4] — clamping to length-VISIBLE_COUNT instead would give
+  // [1,2,3] then [2,3,4], which isn't what the carousel should do.
+  const totalPages = Math.max(1, Math.ceil(sliders.length / VISIBLE_COUNT));
+  const maxOffset = (totalPages - 1) * VISIBLE_COUNT;
+  const visible = sliders.slice(offset, offset + VISIBLE_COUNT);
+  const hasNext = offset < maxOffset;
   const hasPrev = offset > 0;
 
   function next() {
-    setOffset((prev) => Math.min(prev + 3, sliders.length - 1));
+    setOffset((prev) => Math.min(prev + VISIBLE_COUNT, maxOffset));
   }
 
   function prev() {
-    setOffset((prev) => Math.max(prev - 3, 0));
+    setOffset((prev) => Math.max(prev - VISIBLE_COUNT, 0));
   }
 
-  return (
-    <div className="relative mt-8">
-      {hasPrev && (
-        <button
-          type="button"
-          aria-label="Previous"
-          onClick={prev}
-          className="absolute left-0 top-1/2 z-10 flex h-[64px] w-[64px] -translate-y-1/2 items-center justify-center rounded-full bg-[#d9d9d9] text-ink hover:bg-[#c9c9c9] transition-colors"
-        >
-          <ArrowRight className="h-4 w-4 rotate-180" strokeWidth={1.4} />
-        </button>
-      )}
+  // Progress = "how far through the list have we revealed?" Using
+  // (offset + VISIBLE_COUNT) / total works for any list length, including
+  // ones where offset isn't a clean multiple (e.g. 5 sliders → maxOffset=2,
+  // and the old "page index" math stayed at page 1 in both states).
+  const showFooter = sliders.length > VISIBLE_COUNT;
+  const progressPct = sliders.length === 0
+    ? 100
+    : Math.min(100, Math.round(((offset + VISIBLE_COUNT) / sliders.length) * 100));
 
-      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-[1.68fr_1fr_1fr] ${hasPrev ? "md:pl-20" : ""} ${hasNext ? "md:pr-28" : ""}`}>
-        {visible.map((s) => (
-          <SliderCard key={s.id} s={s} />
-        ))}
+  // translateX moves the track left by `offset` cards. Each card is
+  // (100/VISIBLE_COUNT)% wide so exactly VISIBLE_COUNT cards fit in the
+  // viewport at any offset. Mobile (< sm) shows 1 card, tablet shows 2.
+  const trackTransform = `translateX(-${(offset / VISIBLE_COUNT) * 100}%)`;
+
+  return (
+    <div className="mt-8">
+      <div className="relative">
+        {hasPrev && (
+          <button
+            type="button"
+            aria-label="Previous"
+            onClick={prev}
+            className="absolute left-0 top-1/2 z-10 flex h-[64px] w-[64px] -translate-y-1/2 items-center justify-center rounded-full bg-[#d9d9d9] text-ink hover:bg-[#c9c9c9] transition-colors"
+          >
+            <ArrowRight className="h-4 w-4 rotate-180" strokeWidth={1.4} />
+          </button>
+        )}
+
+        {/* Use margin instead of padding so the overflow-hidden box itself
+            shrinks to exclude the arrow zones — padding doesn't clip and was
+            letting the 4th card bleed under the right arrow. */}
+        <div className={`overflow-hidden ${hasPrev ? "md:ml-20" : ""} ${hasNext ? "md:mr-28" : ""}`}>
+          {/* The track uses clean fractional widths (w-full / 1/2 / 1/3) and
+              creates the visual gap with px-2 inside each item, so the math
+              is exact: 3 items × 33.333% = 100%, no overflow. */}
+          <div
+            className="-mx-2 flex transition-transform duration-500 ease-out"
+            style={{ transform: trackTransform }}
+          >
+            {sliders.map((s) => (
+              <div key={s.id} className="w-full shrink-0 px-2 sm:w-1/2 md:w-1/3">
+                <SliderCard s={s} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {hasNext && (
+          <button
+            type="button"
+            aria-label="Next"
+            onClick={next}
+            className="absolute right-0 top-1/2 flex h-[64px] w-[64px] -translate-y-1/2 items-center justify-center rounded-full bg-[#d9d9d9] text-ink hover:bg-[#c9c9c9] transition-colors"
+          >
+            <ArrowRight className="h-4 w-4" strokeWidth={1.4} />
+          </button>
+        )}
       </div>
 
-      {hasNext && (
-        <button
-          type="button"
-          aria-label="Next"
-          onClick={next}
-          className="absolute right-0 top-1/2 flex h-[64px] w-[64px] -translate-y-1/2 items-center justify-center rounded-full bg-[#d9d9d9] text-ink hover:bg-[#c9c9c9] transition-colors"
-        >
-          <ArrowRight className="h-4 w-4" strokeWidth={1.4} />
-        </button>
+      {showFooter && (
+        <div className="mt-10 flex items-center gap-4">
+          <div className="flex flex-1 items-center">
+            <span
+              className="h-[2px] rounded-full bg-ink-soft transition-[width] duration-300 ease-out"
+              style={{ width: `${progressPct}%` }}
+            />
+            <span className="h-px flex-1 bg-[#cfcfcf]" />
+          </div>
+          <Link
+            href="/products"
+            className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-7 text-[13px] font-medium text-ink hover:bg-black/5"
+          >
+            View All Products
+          </Link>
+          <button
+            type="button"
+            aria-label="Previous"
+            onClick={prev}
+            disabled={!hasPrev}
+            className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4 rotate-180" />
+          </button>
+          <button
+            type="button"
+            aria-label="Next"
+            onClick={next}
+            disabled={!hasNext}
+            className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       )}
     </div>
   );

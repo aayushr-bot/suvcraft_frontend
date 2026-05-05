@@ -1,5 +1,5 @@
 "use client";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BoltIcon, ChevronRight, HeartFill, HeartLine, Star, TagIcon } from "./icons";
 import ProductImage from "./ProductImage";
@@ -47,7 +47,6 @@ export default function AllProducts({
   selectedTypeSlug?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const offsetRef = useRef(0);
   const wishlist = useWishlist();
 
   const toggleFav = (e: React.MouseEvent, p: Product) => {
@@ -65,6 +64,38 @@ export default function AllProducts({
     });
   };
 
+  // Track current scroll position so the progress bar fills, prev/next can
+  // disable at the edges, and the footer row can hide when no scrolling is
+  // needed at all. Re-measure on resize / content change.
+  const [scrollState, setScrollState] = useState({ left: 0, max: 0, client: 0 });
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const max = Math.max(0, el.scrollWidth - el.clientWidth);
+      setScrollState({ left: el.scrollLeft, max, client: el.clientWidth });
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [products.length]);
+
+  const canScroll = scrollState.max > 0;
+  const hasPrev = scrollState.left > 1;
+  const hasNext = scrollState.left + 1 < scrollState.max;
+  // Bar fills as you scroll: fraction of total content revealed so far.
+  const totalContent = scrollState.max + scrollState.client;
+  const progressPct = totalContent > 0
+    ? Math.min(100, Math.round(((scrollState.left + scrollState.client) / totalContent) * 100))
+    : 100;
+
   // Pills filter by category tab. Category itself is set via the navbar
   // (?category_id=…), and the two compose — clicking a tab keeps the active
   // category in the URL.
@@ -80,9 +111,13 @@ export default function AllProducts({
   function scroll(dir: -1 | 1) {
     const container = containerRef.current;
     if (!container) return;
-    const maxScroll = container.scrollWidth - container.clientWidth;
-    offsetRef.current = Math.max(0, Math.min(maxScroll, offsetRef.current + dir * CARD_WIDTH * 2));
-    container.scrollTo({ left: offsetRef.current, behavior: "smooth" });
+    // Advance by a "page" — as many cards (in a single row) as currently fit
+    // in the viewport. Round down so we always land on a clean column edge.
+    const colsPerPage = Math.max(1, Math.floor(container.clientWidth / CARD_WIDTH));
+    const pageWidth = colsPerPage * CARD_WIDTH;
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    const next = Math.max(0, Math.min(maxScroll, container.scrollLeft + dir * pageWidth));
+    container.scrollTo({ left: next, behavior: "smooth" });
   }
 
   const activeCategory = selectedCategoryId
@@ -250,34 +285,41 @@ export default function AllProducts({
         ))}
       </div>}
 
-      <div className="mt-10 flex items-center gap-4">
-        <div className="flex flex-1 items-center">
-          <span className="h-[2px] w-1/4 rounded-full bg-ink-soft" />
-          <span className="h-px flex-1 bg-[#cfcfcf]" />
+      {canScroll && (
+        <div className="mt-10 hidden md:flex items-center gap-4">
+          <div className="flex flex-1 items-center">
+            <span
+              className="h-[2px] rounded-full bg-ink-soft transition-[width] duration-300 ease-out"
+              style={{ width: `${progressPct}%` }}
+            />
+            <span className="h-px flex-1 bg-[#cfcfcf]" />
+          </div>
+          <Link
+            href="/products"
+            className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-7 text-[13px] font-medium text-ink hover:bg-black/5"
+          >
+            View All Products
+          </Link>
+          <button
+            type="button"
+            aria-label="Previous"
+            onClick={() => scroll(-1)}
+            disabled={!hasPrev}
+            className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4 rotate-180" />
+          </button>
+          <button
+            type="button"
+            aria-label="Next"
+            onClick={() => scroll(1)}
+            disabled={!hasNext}
+            className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
-        <Link
-          href="/products"
-          className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-7 text-[13px] font-medium text-ink hover:bg-black/5"
-        >
-          View All Products
-        </Link>
-        <button
-          type="button"
-          aria-label="Previous"
-          onClick={() => scroll(-1)}
-          className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
-        >
-          <ChevronRight className="h-4 w-4 rotate-180" />
-        </button>
-        <button
-          type="button"
-          aria-label="Next"
-          onClick={() => scroll(1)}
-          className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
+      )}
     </section>
   );
 }

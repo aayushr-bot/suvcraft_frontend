@@ -70,27 +70,9 @@ export default function Hero({
         </div>
       </div>
 
+      {/* The footer row (progress bar + View All + prev/next) lives inside
+          HeroSlider so it has direct access to the carousel offset state. */}
       <HeroSlider sliders={sliders} />
-
-      <div className="mt-10 flex items-center gap-4">
-        <div className="flex flex-1 items-center">
-          <span className="h-[2px] w-1/4 rounded-full bg-ink-soft" />
-          <span className="h-px flex-1 bg-[#cfcfcf]" />
-        </div>
-        <button
-          type="button"
-          className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-7 text-[13px] font-medium text-ink hover:bg-black/5"
-        >
-          Feature Work
-        </button>
-        <button
-          type="button"
-          aria-label="Next"
-          className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
     </section>
   );
 }
