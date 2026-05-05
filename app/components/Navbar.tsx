@@ -77,7 +77,10 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   const pathname = usePathname();
   const router = useRouter();
   const isSimplifiedHeader = pathname === "/cart" || pathname === "/checkout" || pathname === "/payment" || pathname === "/payment-success";
-  const isProductPage = pathname.startsWith("/product");
+  // Only the singular detail route (/product/[id]) gets the white-nav treatment.
+  // The trailing slash matters — without it this also matched /products (the
+  // catalog page), giving the listing a mismatched white nav over a cream body.
+  const isProductPage = pathname.startsWith("/product/");
 
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);

@@ -255,12 +255,12 @@ export default function AllProducts({
           <span className="h-[2px] w-1/4 rounded-full bg-ink-soft" />
           <span className="h-px flex-1 bg-[#cfcfcf]" />
         </div>
-        <button
-          type="button"
+        <Link
+          href="/products"
           className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-7 text-[13px] font-medium text-ink hover:bg-black/5"
         >
-          Feature Work
-        </button>
+          View All Products
+        </Link>
         <button
           type="button"
           aria-label="Previous"
