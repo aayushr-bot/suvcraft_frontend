@@ -201,7 +201,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
         {/* Desktop + tablet category rail */}
         <div className="mt-4 hidden h-[64px] items-center gap-4 rounded-[15px] border-y border-[#d4d4d4] px-6 md:flex">
           <nav
-            className="flex flex-1 min-w-0 items-center gap-5 overflow-x-auto whitespace-nowrap text-[14px] lg:gap-7 lg:text-[15px]"
+            className="flex flex-1 min-w-0 items-center justify-between gap-5 overflow-x-auto whitespace-nowrap text-[14px] lg:gap-7 lg:text-[15px]"
             style={{ scrollbarWidth: "none" }}
           >
             {navLinks.map((c) => {
@@ -221,7 +221,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
             })}
           </nav>
 
-          <label className="flex h-[40px] w-[200px] shrink-0 items-center gap-2 rounded-[45px] bg-paper px-4 shadow-sm lg:w-[260px] lg:h-[44px] lg:px-5">
+          <label className="ml-4 flex h-[40px] w-[280px] shrink-0 items-center gap-2 rounded-[45px] bg-paper px-4 shadow-sm lg:ml-8 lg:w-[380px] lg:h-[44px] lg:px-5">
             <input
               type="search"
               placeholder="Search Product"
