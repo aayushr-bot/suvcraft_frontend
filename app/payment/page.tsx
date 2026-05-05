@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/lib/cartContext";
@@ -23,6 +23,16 @@ export default function PaymentPage() {
   const [method, setMethod] = useState("cod");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Bounce unauthenticated users back to /cart (where the auth modal can prompt login)
+  useEffect(() => {
+    fetch(`${API}/api/v1/auth/me`, { credentials: "include", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j?.data?.user) router.replace("/cart");
+      })
+      .catch(() => {});
+  }, [router]);
 
   // UPI / Card fields (placeholder — no real gateway)
   const [upiId, setUpiId] = useState("");
@@ -72,6 +82,12 @@ export default function PaymentPage() {
         }),
       });
       const json = await res.json();
+      if (res.status === 401) {
+        setError("Please log in to place this order.");
+        // Bounce to checkout where the auth modal can prompt login
+        setTimeout(() => router.push("/cart"), 1500);
+        return;
+      }
       if (json.error) { setError(json.message || "Order failed."); return; }
 
       clearCart();
