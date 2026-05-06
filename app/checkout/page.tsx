@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/lib/cartContext";
 import { imgUrl, type Address } from "@/lib/api";
-import { ChevronRight } from "../components/icons";
+import { Star } from "../components/icons";
 import ProductImage from "../components/ProductImage";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -29,6 +29,7 @@ const inputCls =
 type FormState = {
   name: string;
   mobile: string;
+  email: string;
   pincode: string;
   address: string;
   landmark: string;
@@ -38,13 +39,14 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  name: "", mobile: "", pincode: "", address: "", landmark: "", city: "", state: "", type: "Home",
+  name: "", mobile: "", email: "", pincode: "", address: "", landmark: "", city: "", state: "", type: "Home",
 };
 
 function fromAddress(a: Address): FormState {
   return {
     name: a.name || "",
     mobile: a.mobile || "",
+    email: a.email || "",
     pincode: a.pincode || "",
     address: a.address || "",
     landmark: a.landmark || "",
@@ -66,6 +68,34 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [productInfo, setProductInfo] = useState<Record<number, { rating?: number; mrp?: number }>>({});
+
+  // Pull rating + MRP per cart item — CartItem only carries the selling price,
+  // and we need the original (pre-discount) price to populate "Total MRP".
+  useEffect(() => {
+    let cancelled = false;
+    items.forEach((item) => {
+      if (productInfo[item.id]) return;
+      fetch(`${API}/api/v1/products/${item.id}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (cancelled || !j?.data) return;
+          const p = j.data;
+          const price = Number(p.price ?? 0);
+          const special = Number(p.special_price ?? 0);
+          const mrp = special && price && special < price ? price : price || special;
+          setProductInfo((prev) => ({
+            ...prev,
+            [item.id]: { rating: Number(p.rating) || undefined, mrp: mrp || undefined },
+          }));
+        })
+        .catch(() => {});
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
+
+  const totalMrp = items.reduce((sum, it) => sum + (productInfo[it.id]?.mrp ?? it.price) * it.qty, 0);
 
   // The site-wide body has a cream → grey gradient. On checkout we want a
   // clean white canvas, so override at mount and restore on unmount.
@@ -126,6 +156,7 @@ export default function CheckoutPage() {
   function validate(): string {
     if (!form.name.trim()) return "Full name is required.";
     if (!/^\d{10}$/.test(form.mobile.replace(/\D/g, ""))) return "Enter a valid 10-digit mobile number.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Enter a valid email address.";
     if (!/^\d{6}$/.test(form.pincode.trim())) return "Enter a valid 6-digit pincode.";
     if (!form.address.trim()) return "Address is required.";
     if (!form.city.trim()) return "City is required.";
@@ -221,16 +252,13 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 pb-16 pt-1 md:px-8 bg-white min-h-screen">
-      <div className="mb-8">
-        <h1 className="text-[24px] font-bold text-ink md:text-[28px]">Checkout</h1>
-      </div>
 
       <div className="flex flex-col lg:flex-row lg:items-start gap-8">
         {/* Left: Address management — fills remaining space (no max-width cap) */}
         <div className="flex-1 min-w-0">
-          <div className="rounded-[14px] border border-[#e7e7e7] bg-white shadow-sm overflow-hidden">
+          <div className="rounded-[5px] border-2 border-dashed border-[#e7e7e7] bg-white overflow-hidden">
             {/* Card header — softer than the heavy bar */}
-            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-[#eee]">
+            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-dashed border-[#e7e7e7]">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f6efff] text-brand-purple">
                 {/* location pin */}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
@@ -261,7 +289,7 @@ export default function CheckoutPage() {
                   return (
                     <div
                       key={a.id}
-                      className={`rounded-[12px] border transition-all ${selected ? "border-ink-soft ring-1 ring-ink-soft bg-[#fafafa]" : "border-[#e7e7e7] hover:border-[#cfcfcf] bg-white"}`}
+                      className={`rounded-[5px] border-2 border-dashed transition-all ${selected ? "border-ink-soft bg-[#fafafa]" : "border-[#e7e7e7] hover:border-[#cfcfcf] bg-white"}`}
                     >
                       {!editing ? (
                         <label className="flex items-start gap-3 p-4 cursor-pointer">
@@ -288,7 +316,7 @@ export default function CheckoutPage() {
                             <p className="mt-1 text-[13.5px] text-[#525151] leading-relaxed">
                               {a.address}{a.landmark ? `, ${a.landmark}` : ""}, {a.city}{a.state ? `, ${a.state}` : ""} – <span className="font-semibold text-ink">{a.pincode}</span>
                             </p>
-                            <p className="mt-1 text-[12.5px] text-[#878787]">📞 {a.mobile}</p>
+                            <p className="mt-1 text-[12.5px] text-[#878787]">{a.mobile}</p>
                             {selected && (
                               <div className="mt-3 flex flex-wrap items-center gap-4 pt-3 border-t border-dashed border-[#e7e7e7]">
                                 <button type="button" onClick={() => startEdit(a)} className="text-[12.5px] font-semibold text-ink hover:underline">
@@ -322,7 +350,7 @@ export default function CheckoutPage() {
 
               {/* New-address form */}
               {editingId === "new" && (
-                <div className="mx-5 my-3 rounded-[12px] border border-ink-soft ring-1 ring-ink-soft bg-[#fafafa] p-4">
+                <div className="mx-5 my-3 rounded-[5px] border-2 border-dashed border-[#e7e7e7] bg-white p-4">
                   <h3 className="text-[13px] font-bold text-ink mb-3 uppercase tracking-wide">Add a new address</h3>
                   <AddressFormFields form={form} set={set} />
                   {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
@@ -357,67 +385,76 @@ export default function CheckoutPage() {
         </div>
 
         {/* Right: Cart Review (sticky on desktop so it stays visible while scrolling) */}
-        <div className="lg:w-[380px] shrink-0 lg:sticky lg:top-6 self-start">
-          <div className="flex flex-col gap-4">
-            {/* Order Summary card */}
-            <div className="rounded-[14px] border border-[#e7e7e7] bg-white shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[#eee]">
-                <h3 className="text-[14px] font-bold text-ink">Order Summary</h3>
-                <span className="text-[12px] text-[#878787]">{count} {count === 1 ? "item" : "items"}</span>
-              </div>
-              <div
-                className="p-5 flex flex-col gap-4 max-h-[300px] overflow-y-auto"
-                style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}
-              >
-                {items.map((item) => (
-                  <div key={item.id} className="flex gap-3">
-                    <div className="h-[60px] w-[60px] shrink-0 rounded-[10px] border border-[#e7e7e7] bg-[#f9f9f9] overflow-hidden flex items-center justify-center">
+        <div className="w-full lg:w-[500px] shrink-0 lg:sticky lg:top-1 self-start">
+          <div className="flex flex-col gap-5">
+            <h3 className="text-[14px] font-bold text-ink mb-[-12px]">Review your Cart</h3>
+
+            {/* Cart items list */}
+            <div className="rounded-[5px] border-2 border-dashed border-[#e7e7e7] bg-white px-5 py-4 max-h-[360px] overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}>
+              {items.map((item, idx) => {
+                const info = productInfo[item.id];
+                const unit = info?.mrp ?? item.price;
+                return (
+                  <div key={item.id} className={`flex items-center gap-3 ${idx > 0 ? "mt-4 pt-4 border-t border-dashed border-[#e7e7e7]" : ""}`}>
+                    <div className="h-[60px] w-[60px] shrink-0 rounded-[6px] bg-[#f9f9f9] overflow-hidden flex items-center justify-center">
                       <ProductImage src={resolveImg(item.image)} alt={item.name} className="h-full w-full object-contain p-1" />
                     </div>
-                    <div className="flex flex-1 min-w-0 flex-col">
-                      <h4 className="text-[13px] font-medium text-ink line-clamp-2 leading-tight">{item.name}</h4>
-                      <span className="mt-0.5 text-[11.5px] text-[#878787]">Qty {item.qty}</span>
-                      <div className="mt-auto pt-1 text-[13px] font-bold text-ink">{fmt(item.price * item.qty)}</div>
+                    <div className="flex flex-1 min-w-0 flex-col gap-0.5">
+                      <h4 className="text-[13px] font-medium text-ink line-clamp-1 leading-tight">{item.name}</h4>
+                      <span className="text-[12px] text-[#878787]">{item.qty}x</span>
+                      <div className="text-[12px] text-[#525151]">
+                        Unit Price : <span className="font-semibold text-ink">{unit.toLocaleString("en-IN")}</span>
+                      </div>
                     </div>
+                    {info?.rating ? (
+                      <div className="flex items-center gap-1 text-[13px] font-semibold text-ink shrink-0">
+                        <Star className="h-3.5 w-3.5 text-yellow-500" />
+                        {info.rating.toFixed(1)}
+                      </div>
+                    ) : null}
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
 
-            {/* Price Details card */}
-            <div className="rounded-[14px] border border-[#e7e7e7] bg-white shadow-sm p-5">
-              <h3 className="text-[12px] font-bold uppercase text-[#878787] tracking-wider mb-4">Price Details</h3>
-              <div className="flex flex-col gap-2.5 text-[14px]">
+            <h3 className="text-[14px] font-bold text-ink mb-[-12px]">
+              Price Summary <span className="font-normal text-[#525151]">( {count} {count === 1 ? "item" : "items"} )</span>
+            </h3>
+
+            {/* Price Summary card */}
+            <div className="rounded-[5px] border-2 border-dashed border-[#e7e7e7] bg-white p-5">
+              <div className="flex flex-col gap-3 text-[14px]">
+                <div className="flex justify-between">
+                  <span className="text-[#525151]">Total MRP</span>
+                  <span className="text-ink font-medium">₹{totalMrp.toLocaleString("en-IN")}</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-[#525151]">Subtotal</span>
-                  <span className="text-ink font-medium">{fmt(total)}</span>
+                  <span className="text-emerald-600 font-semibold">₹{total.toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#525151]">Delivery Charge</span>
-                  <span className={`font-semibold ${deliveryCharge === 0 ? "text-emerald-600" : "text-ink"}`}>
-                    {deliveryCharge === 0 ? "FREE" : fmt(deliveryCharge)}
+                  <span className={`font-medium ${deliveryCharge === 0 ? "text-emerald-600" : "text-ink"}`}>
+                    {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge.toLocaleString("en-IN")}`}
                   </span>
                 </div>
                 {coupon && couponDiscount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-emerald-700 font-medium">Coupon ({coupon.code})</span>
-                    <span className="text-emerald-700 font-semibold">−{fmt(couponDiscount)}</span>
+                    <span className="text-[#525151]">Coupon Discount</span>
+                    <span className="text-ink font-medium">-₹{couponDiscount.toLocaleString("en-IN")}</span>
                   </div>
                 )}
                 {taxTotal > 0 && (
                   <div className="flex justify-between">
                     <span className="text-[#525151]">Tax</span>
-                    <span className="text-ink font-medium">+{fmt(taxTotal)}</span>
+                    <span className="text-ink font-medium">+₹{taxTotal.toLocaleString("en-IN")}</span>
                   </div>
                 )}
-                <div className="my-2 h-px w-full bg-[#eee]" />
+                <div className="my-1 border-t border-dashed border-[#e7e7e7]" />
                 <div className="flex justify-between items-baseline">
-                  <span className="text-[15px] font-bold text-ink">Total</span>
-                  <span className="text-[18px] font-bold text-ink">{fmt(finalTotal)}</span>
+                  <span className="text-[14px] font-medium text-ink">Total</span>
+                  <span className="text-[14px] font-bold text-emerald-600">₹{finalTotal.toLocaleString("en-IN")}</span>
                 </div>
-                {couponDiscount > 0 && (
-                  <p className="text-[12px] text-emerald-700 font-medium">You're saving {fmt(couponDiscount)} on this order.</p>
-                )}
               </div>
             </div>
 
@@ -431,10 +468,9 @@ export default function CheckoutPage() {
               type="button"
               onClick={deliverHere}
               disabled={busy || !selectedId || editingId !== null}
-              className="inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-[12px] bg-ink-soft text-[15px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all hover:shadow-lg"
+              className="inline-flex h-[54px] w-full items-center justify-center rounded-[8px] bg-ink-soft text-[15px] font-medium text-white hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {busy ? "CHECKING…" : "PROCEED TO PAYMENT"}
-              {!busy && <ChevronRight className="h-5 w-5" />}
+              {busy ? "Checking…" : "Proceed to Pay"}
             </button>
 
             <div className="flex items-center justify-center gap-1.5 text-[12px] text-[#878787]">
@@ -451,12 +487,38 @@ export default function CheckoutPage() {
   );
 }
 
+async function lookupPincode(pin: string): Promise<{ city?: string; state?: string } | null> {
+  try {
+    const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+    const data = await res.json();
+    const post = data?.[0]?.PostOffice?.[0];
+    if (!post) return null;
+    return {
+      city: String(post.District || "").trim() || undefined,
+      state: String(post.State || "").trim() || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function AddressFormFields({ form, set }: { form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
+  async function onPincodeChange(raw: string) {
+    const cleaned = raw.replace(/\D/g, "").slice(0, 6);
+    set("pincode", cleaned);
+    if (cleaned.length === 6) {
+      const info = await lookupPincode(cleaned);
+      if (info?.city) set("city", info.city);
+      if (info?.state) set("state", info.state);
+    }
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Full Name *" className={inputCls} />
       <input value={form.mobile} onChange={(e) => set("mobile", e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" placeholder="10-digit Mobile Number *" className={inputCls} />
-      <input value={form.pincode} onChange={(e) => set("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Pincode *" className={inputCls} />
+      <input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" inputMode="email" autoComplete="email" placeholder="Email Address *" className={`${inputCls} sm:col-span-2`} />
+      <input value={form.pincode} onChange={(e) => onPincodeChange(e.target.value)} inputMode="numeric" placeholder="Pincode *" className={inputCls} />
       <input value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="City *" className={inputCls} />
       <input value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="Flat / House No, Building, Street *" className={`${inputCls} sm:col-span-2`} />
       <input value={form.landmark} onChange={(e) => set("landmark", e.target.value)} placeholder="Landmark (optional)" className={inputCls} />

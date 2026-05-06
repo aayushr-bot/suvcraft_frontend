@@ -76,6 +76,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   ];
   const pathname = usePathname();
   const router = useRouter();
+  const isOrdersRoute = pathname === "/orders" || pathname.startsWith("/orders/");
   const isSimplifiedHeader = pathname === "/cart" || pathname === "/checkout" || pathname === "/payment" || pathname === "/payment-success";
   // Only the singular detail route (/product/[id]) gets the white-nav treatment.
   // The trailing slash matters — without it this also matched /products (the
@@ -115,6 +116,8 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
     if (user) setIsProfileOpen(true);
     else setIsSignInOpen(true);
   }
+
+  if (isOrdersRoute) return null;
 
   if (isSimplifiedHeader) {
     return (

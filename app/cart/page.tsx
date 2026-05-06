@@ -590,16 +590,16 @@ export default function CartPage() {
                   <span className="text-ink">{fmt(finalTotal)}</span>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={handleCheckout}
-                disabled={items.length === 0}
-                className="flex h-[58px] w-full items-center justify-center rounded-[10px] bg-[#1c1c1c] text-[16px] font-bold text-white hover:bg-black transition-all mt-8 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#1c1c1c]"
-              >
-                Check Out Now
-              </button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={items.length === 0}
+              className="flex h-[58px] w-full items-center justify-center rounded-[10px] bg-[#1c1c1c] text-[16px] font-bold text-white hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#1c1c1c]"
+            >
+              Check Out Now
+            </button>
 
             {/* Continue Shopping */}
             <Link

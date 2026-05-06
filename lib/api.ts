@@ -101,6 +101,7 @@ export type Address = {
   type?: string;
   mobile: string;
   alternate_mobile?: string;
+  email?: string;
   address: string;
   landmark?: string;
   city: string;

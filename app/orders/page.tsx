@@ -92,11 +92,14 @@ function inTab(status: string, tab: Tab): boolean {
   return true;
 }
 
+const PER_PAGE = 10;
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("all");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     fetch(`${API}/api/v1/orders`, { credentials: "include" })
@@ -128,6 +131,13 @@ export default function OrdersPage() {
     () => (orders || []).filter((o) => inTab(o.status, tab)),
     [orders, tab],
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
+
+  // Reset page when filters change so the user always lands on page 1.
+  useEffect(() => { setPage(1); }, [tab]);
 
   if (orders === null) {
     return (
@@ -213,7 +223,7 @@ export default function OrdersPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {filtered.map((o) => {
+                {paginated.map((o) => {
                   const statusKey = (o.status || "").toLowerCase();
                   const statusLabel = STATUS_LABEL[statusKey] || o.status;
                   const statusClass = STATUS_STYLES[statusKey] || "bg-slate-100 text-slate-700";
@@ -278,6 +288,40 @@ export default function OrdersPage() {
                     </Link>
                   );
                 })}
+              </div>
+            )}
+
+            {filtered.length > PER_PAGE && (
+              <div className="mt-6 flex items-center justify-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-[#e7e7e7] bg-white px-4 text-[12.5px] font-semibold text-[#525151] hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => {
+                  const active = n === safePage;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPage(n)}
+                      className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-[12.5px] font-semibold transition-colors ${active ? "bg-ink text-white" : "border border-[#e7e7e7] bg-white text-[#525151] hover:border-ink hover:text-ink"}`}
+                    >
+                      {n}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-[#e7e7e7] bg-white px-4 text-[12.5px] font-semibold text-[#525151] hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
               </div>
             )}
           </>
