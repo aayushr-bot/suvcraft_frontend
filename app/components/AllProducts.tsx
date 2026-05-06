@@ -125,7 +125,7 @@ export default function AllProducts({
     : null;
 
   return (
-    <section id="all-products" className="mx-auto w-full max-w-[1440px] px-4 py-12 md:px-8 scroll-mt-24">
+    <section id="all-products" className="mx-auto w-full max-w-[1440px] px-4 pt-12 md:px-8 scroll-mt-24">
       <h2 className="font-sans text-[22px] font-semibold leading-tight text-ink md:text-[28px]">
         {activeCategory ? activeCategory.name : "Our All Products"}
       </h2>

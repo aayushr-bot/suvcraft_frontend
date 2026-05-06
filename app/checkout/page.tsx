@@ -220,161 +220,209 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] px-4 py-10 md:px-8 bg-white min-h-screen">
-      <div className="flex flex-col lg:flex-row lg:justify-center gap-10">
-        {/* Left: Address management */}
-        <div className="flex-1 lg:max-w-[720px]">
-          <div className="rounded-[10px] border border-[#e7e7e7] overflow-hidden">
-            <div className="bg-ink-soft px-5 py-3 text-white">
-              <span className="text-[13px] font-semibold tracking-wide">DELIVERY ADDRESS</span>
+    <div className="mx-auto w-full max-w-[1440px] px-4 pb-16 pt-1 md:px-8 bg-white min-h-screen">
+      <div className="mb-8">
+        <h1 className="text-[24px] font-bold text-ink md:text-[28px]">Checkout</h1>
+      </div>
+
+      <div className="flex flex-col lg:flex-row lg:items-start gap-8">
+        {/* Left: Address management — fills remaining space (no max-width cap) */}
+        <div className="flex-1 min-w-0">
+          <div className="rounded-[14px] border border-[#e7e7e7] bg-white shadow-sm overflow-hidden">
+            {/* Card header — softer than the heavy bar */}
+            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-[#eee]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f6efff] text-brand-purple">
+                {/* location pin */}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-7.5-7-12a7 7 0 1 1 14 0c0 4.5-7 12-7 12z" />
+                  <circle cx="12" cy="9" r="2.5" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="text-[15px] font-bold text-ink leading-tight">Delivery address</h2>
+                <p className="text-[12px] text-[#878787] leading-tight">Where should we send your order?</p>
+              </div>
             </div>
 
             <div className="bg-white">
               {addresses.length === 0 && editingId !== "new" && (
-                <div className="px-5 py-8 text-center text-[#525151]">
-                  <p className="text-[14px]">You have no saved addresses yet.</p>
+                <div className="px-5 py-10 text-center">
+                  <div className="text-[28px] mb-1">📦</div>
+                  <p className="text-[14px] font-medium text-ink">No saved addresses yet</p>
+                  <p className="text-[12.5px] text-[#878787] mt-1">Add one below to continue.</p>
                 </div>
               )}
 
               {/* Address list */}
-              {addresses.map((a) => {
-                const selected = selectedId === a.id;
-                const editing = editingId === a.id;
-                return (
-                  <div key={a.id} className={`border-t border-[#e7e7e7] ${selected ? "bg-[#fdfbff]" : ""}`}>
-                    {!editing ? (
-                      <label className="flex items-start gap-3 p-5 cursor-pointer">
-                        <input
-                          type="radio"
-                          checked={selected}
-                          onChange={() => { setSelectedId(a.id); setError(""); }}
-                          className="mt-1 h-4 w-4 accent-brand-purple"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[14px] font-semibold text-ink">{a.name}</span>
-                            {a.type && <span className="text-[10px] uppercase font-bold text-[#525151] bg-[#f0f0f0] rounded-sm px-2 py-0.5">{a.type}</span>}
-                            <span className="text-[14px] font-semibold text-ink">{a.mobile}</span>
-                            {Number(a.is_default) === 1 && (
-                              <span className="text-[10px] uppercase font-bold text-brand-purple">Default</span>
+              <div className="px-5 pt-3 pb-1 flex flex-col gap-3">
+                {addresses.map((a) => {
+                  const selected = selectedId === a.id;
+                  const editing = editingId === a.id;
+                  return (
+                    <div
+                      key={a.id}
+                      className={`rounded-[12px] border transition-all ${selected ? "border-ink-soft ring-1 ring-ink-soft bg-[#fafafa]" : "border-[#e7e7e7] hover:border-[#cfcfcf] bg-white"}`}
+                    >
+                      {!editing ? (
+                        <label className="flex items-start gap-3 p-4 cursor-pointer">
+                          <input
+                            type="radio"
+                            checked={selected}
+                            onChange={() => { setSelectedId(a.id); setError(""); }}
+                            className="mt-1 h-4 w-4 accent-ink-soft"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[14px] font-semibold text-ink">{a.name}</span>
+                              {a.type && (
+                                <span className="text-[10px] uppercase font-bold text-[#525151] bg-[#f0f0f0] rounded px-2 py-0.5">
+                                  {a.type}
+                                </span>
+                              )}
+                              {Number(a.is_default) === 1 && (
+                                <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-50 rounded px-2 py-0.5">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-[13.5px] text-[#525151] leading-relaxed">
+                              {a.address}{a.landmark ? `, ${a.landmark}` : ""}, {a.city}{a.state ? `, ${a.state}` : ""} – <span className="font-semibold text-ink">{a.pincode}</span>
+                            </p>
+                            <p className="mt-1 text-[12.5px] text-[#878787]">📞 {a.mobile}</p>
+                            {selected && (
+                              <div className="mt-3 flex flex-wrap items-center gap-4 pt-3 border-t border-dashed border-[#e7e7e7]">
+                                <button type="button" onClick={() => startEdit(a)} className="text-[12.5px] font-semibold text-ink hover:underline">
+                                  Edit
+                                </button>
+                                <button type="button" onClick={() => removeAddress(a.id)} disabled={busy} className="text-[12.5px] font-semibold text-[#878787] hover:text-red-600">
+                                  Remove
+                                </button>
+                              </div>
                             )}
                           </div>
-                          <p className="mt-1 text-[14px] text-[#525151] leading-relaxed">
-                            {a.address}{a.landmark ? `, ${a.landmark}` : ""}, {a.city}{a.state ? `, ${a.state}` : ""} - <span className="font-semibold text-ink">{a.pincode}</span>
-                          </p>
-                          {selected && (
-                            <div className="mt-4 flex flex-wrap items-center gap-3">
-                              <button type="button" onClick={() => startEdit(a)} className="text-[13px] font-semibold text-brand-purple hover:underline">EDIT</button>
-                              <button type="button" onClick={() => removeAddress(a.id)} disabled={busy} className="text-[13px] font-semibold text-[#525151] hover:text-red-600">REMOVE</button>
-                            </div>
-                          )}
+                        </label>
+                      ) : (
+                        <div className="p-4">
+                          <AddressFormFields form={form} set={set} />
+                          {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
+                          <div className="mt-4 flex flex-wrap items-center gap-3">
+                            <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[8px] bg-ink-soft px-8 text-[13px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
+                              {busy ? "SAVING…" : "SAVE"}
+                            </button>
+                            <button type="button" onClick={cancelForm} className="text-[13px] font-semibold text-[#525151] hover:text-ink">
+                              Cancel
+                            </button>
+                          </div>
                         </div>
-                      </label>
-                    ) : (
-                      <div className="p-5">
-                        <AddressFormFields form={form} set={set} />
-                        {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
-                        <div className="mt-4 flex flex-wrap gap-3">
-                          <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[4px] bg-ink-soft px-8 text-[14px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
-                            {busy ? "SAVING…" : "SAVE"}
-                          </button>
-                          <button type="button" onClick={cancelForm} className="text-[13px] font-semibold text-[#525151] hover:text-ink">CANCEL</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               {/* New-address form */}
               {editingId === "new" && (
-                <div className="border-t border-[#e7e7e7] p-5">
-                  <h3 className="text-[14px] font-semibold text-brand-purple mb-4">+ ADD A NEW ADDRESS</h3>
+                <div className="mx-5 my-3 rounded-[12px] border border-ink-soft ring-1 ring-ink-soft bg-[#fafafa] p-4">
+                  <h3 className="text-[13px] font-bold text-ink mb-3 uppercase tracking-wide">Add a new address</h3>
                   <AddressFormFields form={form} set={set} />
                   {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[4px] bg-ink-soft px-8 text-[14px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[8px] bg-ink-soft px-8 text-[13px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
                       {busy ? "SAVING…" : "SAVE AND DELIVER HERE"}
                     </button>
                     {addresses.length > 0 && (
-                      <button type="button" onClick={cancelForm} className="text-[13px] font-semibold text-[#525151] hover:text-ink">CANCEL</button>
+                      <button type="button" onClick={cancelForm} className="text-[13px] font-semibold text-[#525151] hover:text-ink">
+                        Cancel
+                      </button>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Add-new trigger */}
-              {editingId !== "new" && addresses.length > 0 && (
-                <button
-                  type="button"
-                  onClick={startNew}
-                  className="block w-full border-t border-[#e7e7e7] px-5 py-4 text-left text-[14px] font-semibold text-brand-purple hover:bg-[#fdfbff]"
-                >
-                  + Add a new address
-                </button>
+              {/* Dashed "+ Add a new address" tile */}
+              {editingId !== "new" && (
+                <div className="px-5 pb-5 pt-2">
+                  <button
+                    type="button"
+                    onClick={startNew}
+                    className="flex w-full items-center justify-center gap-2 rounded-[12px] border-2 border-dashed border-[#cfcfcf] py-4 text-[13.5px] font-semibold text-ink hover:border-ink-soft hover:bg-[#fafafa] transition-colors"
+                  >
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-soft text-white text-[14px] leading-none">+</span>
+                    Add a new address
+                  </button>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right: Cart Review */}
-        <div className="lg:w-[380px] shrink-0">
-          <div className="flex flex-col gap-5">
-            <div className="rounded-[10px] border border-[#e7e7e7] bg-white">
-              <div className="px-5 py-3 border-b border-[#e7e7e7]">
-                <h3 className="text-[14px] font-semibold text-ink">Order Summary</h3>
+        {/* Right: Cart Review (sticky on desktop so it stays visible while scrolling) */}
+        <div className="lg:w-[380px] shrink-0 lg:sticky lg:top-6 self-start">
+          <div className="flex flex-col gap-4">
+            {/* Order Summary card */}
+            <div className="rounded-[14px] border border-[#e7e7e7] bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[#eee]">
+                <h3 className="text-[14px] font-bold text-ink">Order Summary</h3>
+                <span className="text-[12px] text-[#878787]">{count} {count === 1 ? "item" : "items"}</span>
               </div>
-              <div className="p-5 flex flex-col gap-4 max-h-[280px] overflow-y-auto">
+              <div
+                className="p-5 flex flex-col gap-4 max-h-[300px] overflow-y-auto"
+                style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}
+              >
                 {items.map((item) => (
                   <div key={item.id} className="flex gap-3">
-                    <div className="h-[60px] w-[60px] shrink-0 rounded-[8px] border border-[#e7e7e7] bg-[#f9f9f9] overflow-hidden flex items-center justify-center">
+                    <div className="h-[60px] w-[60px] shrink-0 rounded-[10px] border border-[#e7e7e7] bg-[#f9f9f9] overflow-hidden flex items-center justify-center">
                       <ProductImage src={resolveImg(item.image)} alt={item.name} className="h-full w-full object-contain p-1" />
                     </div>
                     <div className="flex flex-1 min-w-0 flex-col">
-                      <h4 className="text-[13px] font-medium text-ink truncate">{item.name}</h4>
-                      <span className="text-[11px] text-[#8c8c8c]">Qty: {item.qty}</span>
-                      <div className="mt-1 text-[13px] font-bold text-ink">{fmt(item.price * item.qty)}</div>
+                      <h4 className="text-[13px] font-medium text-ink line-clamp-2 leading-tight">{item.name}</h4>
+                      <span className="mt-0.5 text-[11.5px] text-[#878787]">Qty {item.qty}</span>
+                      <div className="mt-auto pt-1 text-[13px] font-bold text-ink">{fmt(item.price * item.qty)}</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-[10px] border border-[#e7e7e7] bg-white p-5">
-              <h3 className="text-[13px] font-semibold uppercase text-[#878787] tracking-wide mb-4">Price Details ({count} {count === 1 ? "item" : "items"})</h3>
-              <div className="flex flex-col gap-3 text-[14px]">
+            {/* Price Details card */}
+            <div className="rounded-[14px] border border-[#e7e7e7] bg-white shadow-sm p-5">
+              <h3 className="text-[12px] font-bold uppercase text-[#878787] tracking-wider mb-4">Price Details</h3>
+              <div className="flex flex-col gap-2.5 text-[14px]">
                 <div className="flex justify-between">
-                  <span className="text-ink">Subtotal</span>
-                  <span className="text-ink">{fmt(total)}</span>
+                  <span className="text-[#525151]">Subtotal</span>
+                  <span className="text-ink font-medium">{fmt(total)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-ink">Delivery Charge</span>
-                  <span className={`font-medium ${deliveryCharge === 0 ? "text-green-600" : "text-[#525151]"}`}>
+                  <span className="text-[#525151]">Delivery Charge</span>
+                  <span className={`font-semibold ${deliveryCharge === 0 ? "text-emerald-600" : "text-ink"}`}>
                     {deliveryCharge === 0 ? "FREE" : fmt(deliveryCharge)}
                   </span>
                 </div>
                 {coupon && couponDiscount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-green-700 font-medium">Coupon ({coupon.code})</span>
-                    <span className="text-green-700 font-semibold">−{fmt(couponDiscount)}</span>
+                    <span className="text-emerald-700 font-medium">Coupon ({coupon.code})</span>
+                    <span className="text-emerald-700 font-semibold">−{fmt(couponDiscount)}</span>
                   </div>
                 )}
                 {taxTotal > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-ink">Tax</span>
-                    <span className="text-[#525151] font-medium">+{fmt(taxTotal)}</span>
+                    <span className="text-[#525151]">Tax</span>
+                    <span className="text-ink font-medium">+{fmt(taxTotal)}</span>
                   </div>
                 )}
-                <hr className="my-1 border-dashed border-[#e7e7e7]" />
-                <div className="flex justify-between text-[16px] font-bold">
-                  <span className="text-ink">Total Amount</span>
-                  <span className="text-ink">{fmt(finalTotal)}</span>
+                <div className="my-2 h-px w-full bg-[#eee]" />
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[15px] font-bold text-ink">Total</span>
+                  <span className="text-[18px] font-bold text-ink">{fmt(finalTotal)}</span>
                 </div>
+                {couponDiscount > 0 && (
+                  <p className="text-[12px] text-emerald-700 font-medium">You're saving {fmt(couponDiscount)} on this order.</p>
+                )}
               </div>
             </div>
 
             {error && (
-              <div className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700">
+              <div className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] font-medium text-red-700">
                 {error}
               </div>
             )}
@@ -383,15 +431,19 @@ export default function CheckoutPage() {
               type="button"
               onClick={deliverHere}
               disabled={busy || !selectedId || editingId !== null}
-              className="inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-[10px] bg-ink-soft text-[15px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-[12px] bg-ink-soft text-[15px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all hover:shadow-lg"
             >
               {busy ? "CHECKING…" : "PROCEED TO PAYMENT"}
               {!busy && <ChevronRight className="h-5 w-5" />}
             </button>
 
-            <p className="text-[12px] text-[#878787] leading-relaxed">
-              Safe and Secure Payments. Easy returns. 100% Authentic products.
-            </p>
+            <div className="flex items-center justify-center gap-1.5 text-[12px] text-[#878787]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+              </svg>
+              Safe and Secure Payments. Easy returns.
+            </div>
           </div>
         </div>
       </div>

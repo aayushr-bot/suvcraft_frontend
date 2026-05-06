@@ -67,7 +67,7 @@ export default async function Footer() {
     || (siteTitle ? `© ${new Date().getFullYear()} ${siteTitle}. All rights reserved.` : "");
 
   return (
-    <footer className="bg-[#F2F2F2] text-ink py-14 px-4 md:px-8 border-t border-[#e0e0e0]">
+    <footer className="bg-[#F2F2F2] text-ink py-14 px-4 md:px-8">
       <div className="mx-auto w-full max-w-[1440px]">
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-12 lg:gap-12 mb-12">
 
@@ -107,9 +107,9 @@ export default async function Footer() {
           </div>
 
           {/* Quick Links (auto-derived from categories) */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 lg:pl-45">
             <h4 className="font-bold text-[16px] mb-5 text-ink">Quick Links</h4>
-            <ul className="flex flex-col gap-3">
+            <ul className="flex flex-col gap-5">
               {quickLinks.map((l) => (
                 <li key={l.label + l.href}>
                   <a href={l.href} className="text-[14px] text-[#525151] hover:text-ink hover:underline">
@@ -157,8 +157,17 @@ export default async function Footer() {
         </div>
 
         {copyright && (
-          <div className="border-t border-[#c7c7c7] pt-6 mt-2">
-            <p className="text-[14px] font-medium text-ink">{copyright}</p>
+          <div
+            className="pt-6 mt-2"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, #7E7E7E 50%, transparent 50%)",
+              backgroundSize: "10px 1px",
+              backgroundRepeat: "repeat-x",
+              backgroundPosition: "top",
+            }}
+          >
+            <p className="text-[14px] font-medium text-ink pl-20">{copyright}</p>
           </div>
         )}
       </div>

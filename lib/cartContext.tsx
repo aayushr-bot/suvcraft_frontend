@@ -28,10 +28,23 @@ type Action =
   | { type: "REMOVE_SAVED"; id: number }
   | { type: "CLEAR" };
 
+// Collapse rows that share the same product id, keeping the highest qty.
+// The server's /api/v1/cart can occasionally return two rows for one product
+// (e.g. an active row + an orphaned saved-for-later row), and React then
+// warns about duplicate keys. Dedupe defensively at the reducer.
+function dedupeById(items: CartItem[]): CartItem[] {
+  const byId = new Map<number, CartItem>();
+  for (const it of items) {
+    const cur = byId.get(it.id);
+    byId.set(it.id, cur ? { ...cur, qty: Math.max(cur.qty, it.qty) } : it);
+  }
+  return [...byId.values()];
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "INIT":
-      return { items: action.items, saved: action.saved };
+      return { items: dedupeById(action.items), saved: dedupeById(action.saved) };
     case "ADD": {
       const existing = state.items.find((i) => i.id === action.item.id);
       if (existing) {
