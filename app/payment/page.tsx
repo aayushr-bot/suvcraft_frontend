@@ -34,6 +34,14 @@ export default function PaymentPage() {
       .catch(() => {});
   }, [router]);
 
+  // Same body override as checkout — payment is a clean white canvas, not the
+  // site-wide cream gradient.
+  useEffect(() => {
+    const prevBg = document.body.style.background;
+    document.body.style.background = "#ffffff";
+    return () => { document.body.style.background = prevBg; };
+  }, []);
+
   // UPI / Card fields (placeholder — no real gateway)
   const [upiId, setUpiId] = useState("");
   const [cardNo, setCardNo] = useState("");

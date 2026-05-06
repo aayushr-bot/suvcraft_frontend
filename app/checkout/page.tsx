@@ -67,6 +67,14 @@ export default function CheckoutPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // The site-wide body has a cream → grey gradient. On checkout we want a
+  // clean white canvas, so override at mount and restore on unmount.
+  useEffect(() => {
+    const prevBg = document.body.style.background;
+    document.body.style.background = "#ffffff";
+    return () => { document.body.style.background = prevBg; };
+  }, []);
+
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -213,11 +221,11 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 py-10 md:px-8 bg-white min-h-screen">
-      <div className="flex flex-col lg:flex-row gap-10">
+      <div className="flex flex-col lg:flex-row lg:justify-center gap-10">
         {/* Left: Address management */}
         <div className="flex-1 lg:max-w-[720px]">
           <div className="rounded-[10px] border border-[#e7e7e7] overflow-hidden">
-            <div className="bg-brand-purple px-5 py-3 text-white">
+            <div className="bg-ink-soft px-5 py-3 text-white">
               <span className="text-[13px] font-semibold tracking-wide">DELIVERY ADDRESS</span>
             </div>
 
@@ -267,7 +275,7 @@ export default function CheckoutPage() {
                         <AddressFormFields form={form} set={set} />
                         {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
                         <div className="mt-4 flex flex-wrap gap-3">
-                          <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[4px] bg-brand-purple px-8 text-[14px] font-bold text-white tracking-wide hover:brightness-110 disabled:opacity-60">
+                          <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[4px] bg-ink-soft px-8 text-[14px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
                             {busy ? "SAVING…" : "SAVE"}
                           </button>
                           <button type="button" onClick={cancelForm} className="text-[13px] font-semibold text-[#525151] hover:text-ink">CANCEL</button>
@@ -285,7 +293,7 @@ export default function CheckoutPage() {
                   <AddressFormFields form={form} set={set} />
                   {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[4px] bg-brand-purple px-8 text-[14px] font-bold text-white tracking-wide hover:brightness-110 disabled:opacity-60">
+                    <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[4px] bg-ink-soft px-8 text-[14px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
                       {busy ? "SAVING…" : "SAVE AND DELIVER HERE"}
                     </button>
                     {addresses.length > 0 && (
