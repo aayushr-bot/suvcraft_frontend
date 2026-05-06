@@ -375,7 +375,7 @@ export default function CheckoutPage() {
               type="button"
               onClick={deliverHere}
               disabled={busy || !selectedId || editingId !== null}
-              className="inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-[10px] bg-brand-purple text-[15px] font-bold text-white tracking-wide hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-[10px] bg-ink-soft text-[15px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy ? "CHECKING…" : "PROCEED TO PAYMENT"}
               {!busy && <ChevronRight className="h-5 w-5" />}
