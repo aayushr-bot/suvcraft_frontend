@@ -74,6 +74,7 @@ export type Slider = {
   description?: string;
   bg_color?: string;
   bg_image?: string;
+  row_order?: number;
   product_name?: string;
   category_name?: string;
   name?: string;
