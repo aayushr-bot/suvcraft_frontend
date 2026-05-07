@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import AllProducts from "./components/AllProducts";
 import BagCollection from "./components/BagCollection";
 import FeatureStrip from "./components/FeatureStrip";
+import Hero from "./components/Hero";
 import TopSelling from "./components/TopSelling";
 
 export default async function Home({
@@ -15,7 +16,7 @@ export default async function Home({
   const categoryId = resolved?.category_id;
   const typeSlug = resolved?.type;
 
-  const [productsData, categoriesData, categoryTabsData, settingsData, collectionsData] = await Promise.allSettled([
+  const [productsData, categoriesData, categoryTabsData, slidersData, settingsData, collectionsData] = await Promise.allSettled([
     api.products({
       per_page: 20,
       status: "1",
@@ -24,6 +25,7 @@ export default async function Home({
     }),
     api.categories(),
     api.categoryTabs(categoryId ? { category_id: categoryId } : undefined),
+    api.sliders({ type: "hero" }),
     api.settings(),
     api.collections(),
   ]);
@@ -31,6 +33,7 @@ export default async function Home({
   const products = productsData.status === "fulfilled" ? productsData.value.rows : [];
   const categories = categoriesData.status === "fulfilled" ? categoriesData.value.rows : [];
   const categoryTabs = categoryTabsData.status === "fulfilled" ? categoryTabsData.value.rows : [];
+  const sliders = slidersData.status === "fulfilled" ? slidersData.value.rows : [];
   const settings = settingsData.status === "fulfilled" ? settingsData.value : {};
   const collections = collectionsData.status === "fulfilled" ? collectionsData.value.rows : [];
 
@@ -48,6 +51,7 @@ export default async function Home({
 
   return (
     <>
+      {showHero && <Hero sliders={sliders} />}
       {showHero && <FeatureStrip settings={settings} />}
       {showHero && <TopSelling products={topSellingProducts} settings={settings} />}
       {showHero && <BagCollection collections={collections} />}

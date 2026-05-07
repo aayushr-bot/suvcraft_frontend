@@ -70,6 +70,10 @@ export type Slider = {
   discount_text: string;
   buy_now_text: string;
   buy_now_link: string;
+  title?: string;
+  description?: string;
+  bg_color?: string;
+  bg_image?: string;
   product_name?: string;
   category_name?: string;
   name?: string;
