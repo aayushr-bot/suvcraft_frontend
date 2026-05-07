@@ -69,7 +69,7 @@ export default async function Footer() {
   return (
     <footer className="bg-[#F2F2F2] text-ink py-14 px-4 md:px-8">
       <div className="mx-auto w-full max-w-[1440px]">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-12 lg:gap-12 mb-12">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-12 lg:gap-12 mb-6">
 
           {/* Branding */}
           <div className="lg:col-span-4 flex flex-col gap-5">
@@ -108,8 +108,8 @@ export default async function Footer() {
 
           {/* Quick Links (auto-derived from categories) */}
           <div className="lg:col-span-3 lg:pl-45">
-            <h4 className="font-bold text-[16px] mb-5 text-ink">Quick Links</h4>
-            <ul className="flex flex-col gap-5">
+            <h4 className="font-bold text-[16px] mb-3 text-ink">Quick Links</h4>
+            <ul className="flex flex-col gap-1.5">
               {quickLinks.map((l) => (
                 <li key={l.label + l.href}>
                   <a href={l.href} className="text-[14px] text-[#525151] hover:text-ink hover:underline">
@@ -134,21 +134,21 @@ export default async function Footer() {
 
           {/* App download — hidden unless admin enables it AND set at least one URL */}
           {showApp && (
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-3 flex flex-col items-center text-center">
               <h4 className="font-bold text-[16px] mb-3 text-ink">{appTitle}</h4>
               {appTagline && <p className="text-[12px] text-[#878787] mb-1">{appTagline}</p>}
               {appShortDesc && <p className="text-[12px] text-[#878787] leading-[1.5] mb-4">{appShortDesc}</p>}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col items-center gap-3">
                 {playstoreUrl && (
                   <a href={playstoreUrl} target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/figma/Google-play.png" alt="Google Play" className="h-[44px] w-auto object-contain" />
+                    <img src="/figma/Google-play.png" alt="Google Play" className="h-[52px] w-auto object-contain" />
                   </a>
                 )}
                 {appstoreUrl && (
                   <a href={appstoreUrl} target="_blank" rel="noopener noreferrer" className="block hover:opacity-80 transition-opacity">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/figma/App-store.png" alt="App Store" className="h-[44px] w-auto object-contain" />
+                    <img src="/figma/App-store.png" alt="App Store" className="h-[52px] w-auto object-contain" />
                   </a>
                 )}
               </div>
@@ -158,7 +158,7 @@ export default async function Footer() {
 
         {copyright && (
           <div
-            className="pt-6 mt-2"
+            className="pt-10 mt-8"
             style={{
               backgroundImage:
                 "linear-gradient(to right, #7E7E7E 50%, transparent 50%)",
