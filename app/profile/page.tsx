@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircleSolid } from "../components/icons";
+import { CheckCircleSolid, UserIcon } from "../components/icons";
+import { imgUrl } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+
+function resolveAvatar(path?: string): string {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const clean = path.startsWith("/uploads/") ? path.slice("/uploads/".length) : path.replace(/^\//, "");
+  return imgUrl(clean);
+}
 
 type User = {
   id?: number;
@@ -34,12 +42,50 @@ export default function ProfilePage() {
   const [pwdBusy, setPwdBusy] = useState(false);
   const [pwdError, setPwdError] = useState("");
 
+  // Avatar upload
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+
   // Toast
   const [toast, setToast] = useState("");
 
   function flashToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(""), 1800);
+  }
+
+  async function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\//.test(file.type)) {
+      setAvatarError("Please pick an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError("Image must be 5 MB or smaller.");
+      return;
+    }
+    setAvatarError("");
+    setAvatarBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API}/api/v1/me/avatar`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      const j = await res.json();
+      if (j.error) { setAvatarError(j.message || "Could not upload."); return; }
+      setUser((u) => (u ? { ...u, image: j.data?.path || u.image } : u));
+      flashToast("Profile photo updated.");
+    } catch {
+      setAvatarError("Network error. Please try again.");
+    } finally {
+      setAvatarBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   // Override body bg with white for this page (same trick the cart/checkout pages use).
@@ -155,6 +201,44 @@ export default function ProfilePage() {
         <div className={`${cardCls} flex-1`}>
           <h2 className={headerCls}>Personal Details</h2>
           <p className={subHeaderCls}>Your name and email used across the site.</p>
+
+          {/* Profile photo */}
+          <div className="mb-6 flex items-center gap-5">
+            <div className="relative">
+              <div className="h-[88px] w-[88px] rounded-full overflow-hidden border border-[#e7e7e7] bg-[#f6f6f6] flex items-center justify-center">
+                {resolveAvatar(user?.image) ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={resolveAvatar(user?.image)} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  <UserIcon className="h-9 w-9 text-[#cfcfcf]" />
+                )}
+              </div>
+              {avatarBusy && (
+                <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                  <span className="text-[11px] font-semibold text-white">Uploading…</span>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarBusy}
+                className="inline-flex h-[36px] w-fit items-center justify-center rounded-[8px] border border-[#d4d4d4] bg-white px-4 text-[12.5px] font-semibold text-ink hover:border-ink disabled:opacity-60"
+              >
+                {user?.image ? "Change Photo" : "Upload Photo"}
+              </button>
+              <p className="text-[11.5px] text-[#878787]">JPG, PNG, WebP — max 5 MB.</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarPick}
+                className="hidden"
+              />
+              {avatarError && <p className="text-[11.5px] font-medium text-red-600">{avatarError}</p>}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-4">
             <div>

@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BoltIcon, CartIcon, CheckCircleSolid, ChevronRight, HeartFill, HeartLine, Star, TagIcon } from "./icons";
+import { BoltIcon, CheckCircleSolid, ChevronRight, HeartFill, Star, TagIcon } from "./icons";
+import { IoMdHeartEmpty } from "react-icons/io";
+import { IoCart } from "react-icons/io5";
 import ProductImage from "./ProductImage";
 import { type Product, type Category, type CategoryTab, imgUrl } from "@/lib/api";
 import { useWishlist } from "@/lib/wishlistContext";
@@ -239,7 +241,7 @@ export default function AllProducts({
                   >
                     {wishlist.has(p.id)
                       ? <HeartFill className="h-7 w-7 text-[#D90A0A]" />
-                      : <HeartLine className="h-7 w-7 text-[#a3a3a3]" strokeWidth={1.4} />}
+                      : <IoMdHeartEmpty className="h-7 w-7 text-[#a3a3a3]" />}
                   </button>
                   <button
                     type="button"
@@ -247,7 +249,7 @@ export default function AllProducts({
                     onClick={(e) => quickAddToCart(e, p)}
                     className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
                   >
-                    <CartIcon className="h-[18px] w-[18px] text-white" strokeWidth={2.2} />
+                    <IoCart className="h-[18px] w-[18px] text-white" />
                   </button>
                 </div>
 
@@ -301,7 +303,7 @@ export default function AllProducts({
                 >
                   {wishlist.has(p.id)
                     ? <HeartFill className="h-6 w-6 text-[#D90A0A]" />
-                    : <HeartLine className="h-6 w-6 text-[#a3a3a3]" strokeWidth={1.4} />}
+                    : <IoMdHeartEmpty className="h-6 w-6 text-[#a3a3a3]" />}
                 </button>
                 <button
                   type="button"
@@ -309,7 +311,7 @@ export default function AllProducts({
                   onClick={(e) => quickAddToCart(e, p)}
                   className="relative z-10 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
                 >
-                  <CartIcon className="h-4 w-4 text-white" strokeWidth={2.2} />
+                  <IoCart className="h-4 w-4 text-white" />
                 </button>
               </div>
             </div>
