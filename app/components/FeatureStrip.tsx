@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import type { SiteSettings } from "@/lib/api";
 
 type IconKey = "shipping" | "return" | "support" | "safety";
@@ -56,6 +59,10 @@ function Icon({ name, className }: { name: IconKey; className?: string }) {
 }
 
 export default function FeatureStrip({ settings }: { settings: SiteSettings }) {
+  const pathname = usePathname();
+  // Only show on the home page.
+  if (pathname !== "/") return null;
+
   const items: Item[] = [
     {
       key: "shipping",
@@ -87,20 +94,20 @@ export default function FeatureStrip({ settings }: { settings: SiteSettings }) {
   if (!visible.length) return null;
 
   return (
-    <section className="mx-auto w-full max-w-[1440px] px-4 py-10 md:px-8">
+    <section className="mx-auto w-full max-w-[1440px] px-4 pt-10 pb-16 md:px-8">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {visible.map((item) => (
           <div
             key={item.key}
-            className="group flex items-center gap-4 rounded-[18px] border border-[#e7e7e7] bg-paper p-5 transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-12px_rgba(62,1,73,0.25)] hover:border-brand-purple/40"
+            className="group flex flex-col items-center gap-3 rounded-[18px] border border-[#e7e7e7] bg-paper p-6 text-center transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-12px_rgba(62,1,73,0.25)] hover:border-brand-purple/40"
           >
-            <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-[#fff2d1] text-brand-purple ring-1 ring-brand-purple/10 transition-colors group-hover:bg-brand-purple group-hover:text-white">
+            <div className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#fff2d1] text-brand-purple ring-1 ring-brand-purple/10 transition-colors group-hover:bg-brand-purple group-hover:text-white">
               <Icon name={item.key} className="h-6 w-6" />
             </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-[15px] font-bold text-ink leading-tight">{item.title}</h3>
+            <div className="min-w-0">
+              <h3 className="text-[15px] font-bold text-ink leading-[1.5]">{item.title}</h3>
               {item.desc && (
-                <p className="mt-1 text-[12.5px] text-[#605e5e] leading-[1.5]">{item.desc}</p>
+                <p className="mt-1 text-[12.5px] text-[#605e5e] leading-[1.8]">{item.desc}</p>
               )}
             </div>
           </div>

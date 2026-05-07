@@ -525,7 +525,7 @@ function AddressFormFields({ form, set }: { form: FormState; set: <K extends key
       <input value={form.state} onChange={(e) => set("state", e.target.value)} placeholder="State *" className={inputCls} />
       <div className="sm:col-span-2 flex items-center gap-3">
         <span className="text-[13px] font-medium text-[#525151]">Address Type:</span>
-        {["Home", "Work"].map((t) => (
+        {["Home", "Work", "Other"].map((t) => (
           <label key={t} className="flex items-center gap-1.5 text-[13px] cursor-pointer">
             <input type="radio" name="type" checked={form.type === t} onChange={() => set("type", t)} className="accent-brand-purple" />
             {t}

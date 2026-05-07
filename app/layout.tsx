@@ -3,6 +3,7 @@ import { Instrument_Sans, Harmattan, Bruno_Ace_SC } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import FeatureStrip from "./components/FeatureStrip";
 import { api, imgUrl, type SiteSettings } from "@/lib/api";
 import { CartProvider } from "@/lib/cartContext";
 import { WishlistProvider } from "@/lib/wishlistContext";
@@ -71,6 +72,7 @@ export default async function RootLayout({
           <WishlistProvider>
             <Navbar categories={navCategories} logo={headerLogo} siteTitle={siteTitle} />
             <main className="flex-1">{children}</main>
+            <FeatureStrip settings={(navSettings as SiteSettings | null) ?? {}} />
             <Footer />
           </WishlistProvider>
         </CartProvider>

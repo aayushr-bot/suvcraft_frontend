@@ -3,7 +3,6 @@ import { api } from "@/lib/api";
 export const dynamic = "force-dynamic";
 import AllProducts from "./components/AllProducts";
 import BagCollection from "./components/BagCollection";
-import FeatureStrip from "./components/FeatureStrip";
 import Hero from "./components/Hero";
 import TopSelling from "./components/TopSelling";
 
@@ -52,7 +51,6 @@ export default async function Home({
   return (
     <>
       {showHero && <Hero sliders={sliders} />}
-      {showHero && <FeatureStrip settings={settings} />}
       {showHero && <TopSelling products={topSellingProducts} settings={settings} />}
       {showHero && <BagCollection collections={collections} />}
       <AllProducts

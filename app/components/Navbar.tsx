@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -13,12 +13,16 @@ import {
   HeadsetIcon,
   LogOutIcon,
   ChevronRight,
-  HeartLine
+  HeartLine,
+  SettingsIcon,
+  MapPinIcon,
+  CreditCardIcon,
+  BellIcon,
 } from "./icons";
 import Modal from "./Modal";
 import AuthModal from "./AuthModal";
 import ContactModal from "./ContactModal";
-import { type Category, imgUrl } from "@/lib/api";
+import { api, type Category, type CategoryTab, imgUrl } from "@/lib/api";
 
 // Resolve an admin-uploaded logo. Returns "" when admin hasn't uploaded one
 // (caller should hide the <img> rather than render a broken placeholder).
@@ -86,10 +90,61 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const { count: cartCount } = useCart();
   const { count: wishlistCount } = useWishlist();
+  const settingsRef = useRef<HTMLDivElement | null>(null);
+  const [hoveredCatId, setHoveredCatId] = useState<number | null>(null);
+  const [tabsByCat, setTabsByCat] = useState<Record<number, CategoryTab[]>>({});
+  const catCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function openCategory(id: number) {
+    if (catCloseTimerRef.current) {
+      clearTimeout(catCloseTimerRef.current);
+      catCloseTimerRef.current = null;
+    }
+    if (id <= 0) { setHoveredCatId(null); return; }
+    setHoveredCatId(id);
+    // Lazy-fetch tabs the first time a category is hovered, then cache.
+    if (tabsByCat[id] === undefined) {
+      api.categoryTabs({ category_id: id })
+        .then((r) => setTabsByCat((prev) => ({ ...prev, [id]: r.rows ?? [] })))
+        .catch(() => setTabsByCat((prev) => ({ ...prev, [id]: [] })));
+    }
+  }
+
+  function scheduleCloseCategory() {
+    if (catCloseTimerRef.current) clearTimeout(catCloseTimerRef.current);
+    catCloseTimerRef.current = setTimeout(() => setHoveredCatId(null), 1000);
+  }
+
+  // Settings dropdown — mirror the same delayed-close behavior.
+  const settingsCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function openSettings() {
+    if (settingsCloseTimerRef.current) {
+      clearTimeout(settingsCloseTimerRef.current);
+      settingsCloseTimerRef.current = null;
+    }
+    setIsSettingsOpen(true);
+  }
+  function scheduleCloseSettings() {
+    if (settingsCloseTimerRef.current) clearTimeout(settingsCloseTimerRef.current);
+    settingsCloseTimerRef.current = setTimeout(() => setIsSettingsOpen(false), 1000);
+  }
+
+  // Close the settings dropdown when clicking anywhere outside it.
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+    function onClick(e: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [isSettingsOpen]);
 
   function handleSearch() {
     const q = searchQuery.trim();
@@ -205,24 +260,50 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
         <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
 
         {/* Desktop + tablet category rail */}
-        <div className="mt-4 hidden h-[64px] items-center gap-4 rounded-[15px] border-y border-[#d4d4d4] px-6 md:flex">
-          <nav
-            className="flex flex-1 min-w-0 items-center justify-between gap-5 overflow-x-auto whitespace-nowrap text-[14px] lg:gap-7 lg:text-[15px]"
-            style={{ scrollbarWidth: "none" }}
-          >
+        <div className="relative mt-4 hidden h-[64px] items-center gap-4 rounded-[15px] border-y border-[#d4d4d4] px-6 md:flex">
+          <nav className="flex flex-1 min-w-0 items-center justify-between gap-5 whitespace-nowrap text-[14px] lg:gap-7 lg:text-[15px]">
             {navLinks.map((c) => {
               const isActive = c.id === activeCategoryId;
+              const tabs = tabsByCat[c.id];
+              const isOpen = hoveredCatId === c.id && c.id > 0 && tabs && tabs.length > 0;
               return (
-                <Link
+                <div
                   key={c.slug}
-                  href={c.href}
-                  className={`shrink-0 ${isActive
-                    ? "font-semibold text-ink"
-                    : "font-normal text-[#6b6b6b] hover:text-ink"
-                  }`}
+                  className="relative flex h-full items-center"
+                  onMouseEnter={() => openCategory(c.id)}
+                  onMouseLeave={scheduleCloseCategory}
                 >
-                  {c.label}
-                </Link>
+                  <Link
+                    href={c.href}
+                    className={`shrink-0 ${isActive
+                      ? "font-semibold text-ink"
+                      : "font-normal text-[#6b6b6b] hover:text-ink"
+                    }`}
+                  >
+                    {c.label}
+                  </Link>
+                  {isOpen && (
+                    <div className="absolute left-0 top-full mt-1 z-50 min-w-[200px] rounded-[10px] border border-[#e7e7e7] bg-white py-1 shadow-lg">
+                      <Link
+                        href={`/?category_id=${c.id}`}
+                        onClick={() => setHoveredCatId(null)}
+                        className="block px-4 py-2 text-[13px] font-semibold text-ink hover:bg-[#f6f6f6]"
+                      >
+                        All
+                      </Link>
+                      {tabs.map((t) => (
+                        <Link
+                          key={t.id}
+                          href={`/?category_id=${c.id}&type=${t.slug}`}
+                          onClick={() => setHoveredCatId(null)}
+                          className="block px-4 py-2 text-[13px] text-[#525151] hover:bg-[#f6f6f6] hover:text-ink"
+                        >
+                          {t.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </nav>
@@ -241,18 +322,84 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
             </button>
           </label>
 
-          <Link
-            href="/wishlist"
-            aria-label="Wishlist"
-            className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5 md:h-[44px] md:w-[44px]"
+          <div
+            ref={settingsRef}
+            className="relative"
+            onMouseEnter={openSettings}
+            onMouseLeave={scheduleCloseSettings}
           >
-            <HeartLine className="h-5 w-5" />
-            {wishlistCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
-                {wishlistCount > 99 ? "99+" : wishlistCount}
-              </span>
+            <button
+              type="button"
+              aria-label="Settings"
+              aria-expanded={isSettingsOpen}
+              onClick={() => setIsSettingsOpen((v) => !v)}
+              className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5 md:h-[44px] md:w-[44px]"
+            >
+              <SettingsIcon className="h-5 w-5" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                  {wishlistCount > 99 ? "99+" : wishlistCount}
+                </span>
+              )}
+            </button>
+            {isSettingsOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-[220px] rounded-[10px] border border-[#e7e7e7] bg-white py-1 shadow-lg">
+                <Link
+                  href="/wishlist"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <HeartLine className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Wishlist</span>
+                  {wishlistCount > 0 && (
+                    <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                      {wishlistCount > 99 ? "99+" : wishlistCount}
+                    </span>
+                  )}
+                </Link>
+                <Link
+                  href="/orders"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <OrderIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">My Orders</span>
+                </Link>
+                <Link
+                  href="/profile"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <UserIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Edit Profile</span>
+                </Link>
+                <Link
+                  href="/addresses"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <MapPinIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Saved Address</span>
+                </Link>
+                <Link
+                  href="/saved-cards"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <CreditCardIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Saved Cards</span>
+                </Link>
+                <Link
+                  href="/notifications"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <BellIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Notifications</span>
+                </Link>
+              </div>
             )}
-          </Link>
+          </div>
           <Link
             href="/cart"
             aria-label="Cart"
@@ -282,14 +429,19 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               <SearchIcon className="h-4 w-4 text-ink-soft" />
             </button>
           </label>
-          <Link href="/wishlist" aria-label="Wishlist" className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5">
-            <HeartLine className="h-5 w-5" />
+          <button
+            type="button"
+            aria-label="Settings"
+            onClick={() => setIsSettingsOpen((v) => !v)}
+            className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5"
+          >
+            <SettingsIcon className="h-5 w-5" />
             {wishlistCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
                 {wishlistCount > 99 ? "99+" : wishlistCount}
               </span>
             )}
-          </Link>
+          </button>
           <Link href="/cart" aria-label="Cart" className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5">
             <CartIcon className="h-5 w-5" strokeWidth={1.5} />
             {cartCount > 0 && (

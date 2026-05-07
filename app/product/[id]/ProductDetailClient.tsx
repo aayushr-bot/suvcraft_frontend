@@ -268,7 +268,7 @@ export default function ProductDetailClient({
   const breadcrumbs = [
     { label: "Homepage", href: "/" },
     ...(product.category_name
-      ? [{ label: product.category_name, href: product.category_slug ? `/${product.category_slug}` : "/" }]
+      ? [{ label: product.category_name, href: product.category_id ? `/?category_id=${product.category_id}` : "/" }]
       : []),
     { label: product.name, href: "#", current: true },
   ];

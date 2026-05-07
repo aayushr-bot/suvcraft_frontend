@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BoltIcon, ChevronRight, HeartFill, HeartLine, Star, TagIcon } from "./icons";
+import { BoltIcon, CartIcon, CheckCircleSolid, ChevronRight, HeartFill, HeartLine, Star, TagIcon } from "./icons";
 import ProductImage from "./ProductImage";
 import { type Product, type Category, type CategoryTab, imgUrl } from "@/lib/api";
 import { useWishlist } from "@/lib/wishlistContext";
+import { useCart } from "@/lib/cartContext";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 // <Link> auto-prefixes basePath, but window.location.href does NOT.
@@ -48,6 +49,15 @@ export default function AllProducts({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wishlist = useWishlist();
+  const { addToCart } = useCart();
+  const [toast, setToast] = useState("");
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function flashToast(msg: string) {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(""), 1600);
+  }
 
   const toggleFav = (e: React.MouseEvent, p: Product) => {
     // Don't navigate when the heart is clicked.
@@ -62,6 +72,18 @@ export default function AllProducts({
       list_price: Number(p.price ?? 0) || undefined,
       status: p.status,
     });
+  };
+
+  const quickAddToCart = (e: React.MouseEvent, p: Product) => {
+    e.stopPropagation();
+    e.preventDefault();
+    addToCart({
+      id: p.id,
+      name: p.name,
+      image: p.image || "",
+      price: Number(p.special_price ?? 0) || Number(p.price ?? 0),
+    }, 1);
+    flashToast("Product added to cart.");
   };
 
   // Track current scroll position so the progress bar fills, prev/next can
@@ -193,7 +215,7 @@ export default function AllProducts({
                 style={{ height: 360, width: 260 }}
                 onClick={() => { window.location.href = `${BASE}/product/${p.id}`; }}
               >
-                <div className="flex items-start justify-between px-3 pt-3">
+                <div className="flex items-start px-3 pt-3">
                   <div className="flex items-center gap-1.5">
                     <span className="inline-flex h-[24px] items-center gap-1 rounded-[6px] bg-chip px-2 text-[11px] font-medium text-white">
                       <TagIcon className="h-3 w-3" />
@@ -204,21 +226,33 @@ export default function AllProducts({
                       Bestseller
                     </span>
                   </div>
+                </div>
+
+                {/* Stacked heart + cart, anchored to the top-right so they don't push the image down */}
+                <div className="absolute right-3 top-3 z-10 flex flex-col items-center gap-1.5">
                   <button
                     type="button"
                     aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
                     aria-pressed={wishlist.has(p.id)}
                     onClick={(e) => toggleFav(e, p)}
-                    className="relative z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full bg-paper ring-1 ring-[#e7e7e7] hover:ring-ink transition-all"
+                    className="flex h-[36px] w-[36px] items-center justify-center transition-all"
                   >
                     {wishlist.has(p.id)
-                      ? <HeartFill className="h-3.5 w-3.5 text-red-500" />
-                      : <HeartLine className="h-3.5 w-3.5 text-ink" />}
+                      ? <HeartFill className="h-7 w-7 text-[#D90A0A]" />
+                      : <HeartLine className="h-7 w-7 text-[#a3a3a3]" strokeWidth={1.4} />}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Add to cart"
+                    onClick={(e) => quickAddToCart(e, p)}
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
+                  >
+                    <CartIcon className="h-[18px] w-[18px] text-white" strokeWidth={2.2} />
                   </button>
                 </div>
 
-                <div className="relative flex flex-1 items-center justify-center px-4 pb-3 pt-2">
-                  <ProductImage src={getImg(p)} alt={p.name} className="h-[180px] w-full object-contain group-hover:scale-105 transition-transform duration-300" />
+                <div className="relative flex flex-1 items-center justify-center px-4 pb-3 pt-1">
+                  <ProductImage src={getImg(p)} alt={p.name} className="h-[200px] w-full object-contain group-hover:scale-105 transition-transform duration-300" />
                 </div>
 
                 <div className="border-t border-[#eeeeee] px-3 py-3 bg-white">
@@ -257,17 +291,27 @@ export default function AllProducts({
               <span className="inline-flex h-[22px] items-center gap-0.5 rounded-[6px] bg-chip px-1.5 text-[10px] font-medium text-white">
                 <TagIcon className="h-2.5 w-2.5" />Offer
               </span>
-              <button
-                type="button"
-                aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
-                aria-pressed={wishlist.has(p.id)}
-                onClick={(e) => toggleFav(e, p)}
-                className="relative z-10 flex h-[24px] w-[24px] items-center justify-center rounded-full bg-paper ring-1 ring-[#e7e7e7] hover:ring-ink transition-all"
-              >
-                {wishlist.has(p.id)
-                  ? <HeartFill className="h-3 w-3 text-red-500" />
-                  : <HeartLine className="h-3 w-3 text-ink" />}
-              </button>
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
+                  aria-pressed={wishlist.has(p.id)}
+                  onClick={(e) => toggleFav(e, p)}
+                  className="relative z-10 flex h-[32px] w-[32px] items-center justify-center transition-all"
+                >
+                  {wishlist.has(p.id)
+                    ? <HeartFill className="h-6 w-6 text-[#D90A0A]" />
+                    : <HeartLine className="h-6 w-6 text-[#a3a3a3]" strokeWidth={1.4} />}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Add to cart"
+                  onClick={(e) => quickAddToCart(e, p)}
+                  className="relative z-10 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
+                >
+                  <CartIcon className="h-4 w-4 text-white" strokeWidth={2.2} />
+                </button>
+              </div>
             </div>
             <div className="flex items-center justify-center px-3 py-2">
               <ProductImage src={getImg(p)} alt={p.name} className="h-[130px] w-full object-contain" />
@@ -319,6 +363,18 @@ export default function AllProducts({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
+      )}
+
+      {toast && (
+        <>
+          <div className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px]" />
+          <div className="fixed bottom-10 left-1/2 z-[100] flex -translate-x-1/2">
+            <div className="flex items-center gap-3 rounded-[12px] bg-white px-6 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-[#e7e7e7]">
+              <CheckCircleSolid className="h-6 w-6 text-green-600" />
+              <span className="text-[15px] font-medium text-ink">{toast}</span>
+            </div>
+          </div>
+        </>
       )}
     </section>
   );
