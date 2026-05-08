@@ -111,9 +111,14 @@ export default function ProductsClient({
     return list.slice(0, showCount);
   }, [products, priceMax, colorFilter, sortBy, showCount]);
 
-  const avatars = [settings.hero_avatar_1, settings.hero_avatar_2, settings.hero_avatar_3].filter(Boolean) as string[];
-  const customerCount = settings.hero_customer_count || "500+";
-  const customerLabel = settings.hero_customer_label || "Happy Customers";
+  const avatars = [
+    settings.products_avatar_1,
+    settings.products_avatar_2,
+    settings.products_avatar_3,
+  ].filter((s): s is string => Boolean(s && s.trim()));
+  const customerCount = (settings.products_customer_count || "").trim();
+  const customerLabel = (settings.products_customer_label || "").trim();
+  const showCustomerBlock = avatars.length > 0 && customerCount.length > 0;
 
   return (
     <div
@@ -129,8 +134,8 @@ export default function ProductsClient({
             What is Lorem Ipsum? Lorem Ipsum is simply dummy text of the
           </p>
         </div>
-        {avatars.length > 0 && (
-          <div className="flex items-center gap-3">
+        {showCustomerBlock && (
+          <div className="flex flex-col items-center gap-2">
             <div className="flex -space-x-3">
               {avatars.map((src, i) => (
                 /* eslint-disable-next-line @next/next/no-img-element */
@@ -138,14 +143,14 @@ export default function ProductsClient({
                   key={i}
                   src={resolveAvatar(src)}
                   alt=""
-                  className="h-10 w-10 rounded-full border-2 border-white object-cover"
+                  className="h-12 w-12 rounded-full border-[3px] border-white object-cover shadow-sm"
                 />
               ))}
-              <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white bg-ink text-white text-[14px] font-semibold">+</span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white bg-white text-ink text-[18px] font-medium shadow-sm">+</span>
             </div>
-            <div className="leading-tight">
-              <div className="text-[18px] font-bold text-ink">{customerCount}</div>
-              <div className="text-[12px] text-[#8c8c8c]">{customerLabel}</div>
+            <div className="text-center">
+              <div className="text-[22px] font-bold text-ink leading-tight">{customerCount}</div>
+              <div className="text-[14px] text-[#525151]">{customerLabel}</div>
             </div>
           </div>
         )}
@@ -182,26 +187,49 @@ export default function ProductsClient({
           })}
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={showCount}
-            onChange={(e) => setShowCount(Number(e.target.value) as 10 | 20 | 50 | 100)}
-            className="h-[36px] rounded-[6px] border border-[#e7e7e7] bg-white px-3 text-[13px] text-[#525151] cursor-pointer"
-          >
-            <option value={10}>Show: 10</option>
-            <option value={20}>Show: 20</option>
-            <option value={50}>Show: 50</option>
-            <option value={100}>Show: 100</option>
-          </select>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="h-[36px] rounded-[6px] border border-[#e7e7e7] bg-white px-3 text-[13px] text-[#525151] cursor-pointer"
-          >
-            <option value="featured">Sort by: Featured</option>
-            <option value="price-low">Sort by: Price (Low to High)</option>
-            <option value="price-high">Sort by: Price (High to Low)</option>
-            <option value="rating">Sort by: Rating</option>
-          </select>
+          <label className="relative inline-flex h-[40px] items-center gap-2 rounded-[10px] border border-[#e7e7e7] bg-white pl-4 pr-9 text-[13px] text-[#525151] cursor-pointer">
+            {/* Grid icon */}
+            <svg className="h-4 w-4 text-[#525151]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            <span>Show: {showCount}</span>
+            <select
+              value={showCount}
+              onChange={(e) => setShowCount(Number(e.target.value) as 10 | 20 | 50 | 100)}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              aria-label="Show count"
+            >
+              <option value={10}>Show: 10</option>
+              <option value={20}>Show: 20</option>
+              <option value={50}>Show: 50</option>
+              <option value={100}>Show: 100</option>
+            </select>
+            <svg className="absolute right-3 h-3.5 w-3.5 text-[#525151] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+          </label>
+          <label className="relative inline-flex h-[40px] items-center gap-2 rounded-[10px] border border-[#e7e7e7] bg-white pl-4 pr-9 text-[13px] text-[#525151] cursor-pointer">
+            {/* Sort icon */}
+            <svg className="h-4 w-4 text-[#525151]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" />
+              <path d="M6 12h12" />
+              <path d="M9 18h6" />
+            </svg>
+            <span>Sort by: {sortBy === "featured" ? "Featured" : sortBy === "price-low" ? "Price ↑" : sortBy === "price-high" ? "Price ↓" : "Rating"}</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              aria-label="Sort by"
+            >
+              <option value="featured">Sort by: Featured</option>
+              <option value="price-low">Sort by: Price (Low to High)</option>
+              <option value="price-high">Sort by: Price (High to Low)</option>
+              <option value="rating">Sort by: Rating</option>
+            </select>
+            <svg className="absolute right-3 h-3.5 w-3.5 text-[#525151] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+          </label>
         </div>
       </div>
 
@@ -313,46 +341,18 @@ export default function ProductsClient({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {filteredAndSorted.map((p, idx) => {
+              {filteredAndSorted.map((p) => {
                 const sp = Number(p.special_price ?? 0);
                 const rg = Number(p.price ?? 0);
                 const cur = sp && rg && sp < rg ? sp : rg;
                 const off = sp && rg && sp < rg ? Math.round(((rg - sp) / rg) * 100) : 0;
-                // Decorative rotating badges (Sale / -X% / Hot) so each card
-                // gets a label even though we don't tag this server-side yet.
-                const badge = idx % 4 === 0 ? "sale" : idx % 4 === 1 ? "discount" : idx % 4 === 2 ? "hot" : "";
                 return (
                   <Link
                     key={p.id}
                     href={`${BASE}/product/${p.id}`}
                     className="group relative flex flex-col overflow-hidden rounded-[12px] border border-[#e7e7e7] bg-white transition-all hover:shadow-md"
                   >
-                    {badge === "sale" && (
-                      <span
-                        className="absolute left-0 top-0 z-10 inline-flex h-[26px] items-center justify-center bg-[#19A23B] pl-3 pr-5 text-[11px] font-bold text-white"
-                        style={{ clipPath: "polygon(0 0, 100% 0, 85% 100%, 0 100%)" }}
-                      >
-                        Sale
-                      </span>
-                    )}
-                    {badge === "discount" && off > 0 && (
-                      <span
-                        className="absolute left-0 top-0 z-10 inline-flex h-[26px] items-center justify-center bg-[#FF8A1F] pl-3 pr-5 text-[11px] font-bold text-white"
-                        style={{ clipPath: "polygon(0 0, 100% 0, 85% 100%, 0 100%)" }}
-                      >
-                        -{off}%
-                      </span>
-                    )}
-                    {badge === "hot" && (
-                      <span
-                        className="absolute left-0 top-0 z-10 inline-flex h-[26px] items-center justify-center bg-[#E53935] pl-3 pr-5 text-[11px] font-bold text-white"
-                        style={{ clipPath: "polygon(0 0, 100% 0, 85% 100%, 0 100%)" }}
-                      >
-                        Hot
-                      </span>
-                    )}
-
-                    <div className="flex aspect-[3/2] items-center justify-center bg-white p-3">
+                    <div className="flex h-[200px] items-center justify-center bg-white p-3">
                       <ProductImage
                         src={getImg(p)}
                         alt={p.name}

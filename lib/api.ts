@@ -160,6 +160,12 @@ export type SiteSettings = {
   hero_avatar_1?: string;
   hero_avatar_2?: string;
   hero_avatar_3?: string;
+  // Products catalog page customer banner
+  products_avatar_1?: string;
+  products_avatar_2?: string;
+  products_avatar_3?: string;
+  products_customer_count?: string;
+  products_customer_label?: string;
   logo?: string;
   app_name?: string;
   // Top-Selling section
