@@ -132,7 +132,7 @@ export default function ProductDetailClient({
   const attributeOptions = product.attribute_options || [];
   const colorAttr = attributeOptions.find((a) =>
     a.name.toLowerCase().includes("color") ||
-    a.values.some((v) => String(v.swatche_type || "").toLowerCase() === "color")
+    a.values.some((v) => Number(v.swatche_type) === 1)
   );
   const sizeAttr = attributeOptions.find((a) => a !== colorAttr);
 

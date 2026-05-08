@@ -54,7 +54,7 @@ export default function QuickAddModal({
         setProduct(p);
         const colorAttr = (p.attribute_options || []).find((a) =>
           a.name.toLowerCase().includes("color") ||
-          a.values.some((v) => String(v.swatche_type || "").toLowerCase() === "color")
+          a.values.some((v) => Number(v.swatche_type) === 1)
         );
         // Pre-pick first color so the price reflects a real variant.
         setSelectedColorId(colorAttr?.values[0]?.id ?? null);
