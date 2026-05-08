@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CartIcon,
@@ -114,6 +114,7 @@ export default function ProductDetailClient({
   const isOutOfStock = product.stock === 0 || maxQty < minQty;
 
   const { addToCart } = useCart();
+  const relatedScrollRef = useRef<HTMLDivElement>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const activeImg = images[activeIdx] ?? images[0];
   function setActiveImg(img: string) {
@@ -733,15 +734,40 @@ export default function ProductDetailClient({
         <>
           <hr className="my-16 border-[#e7e7e7] border-dashed border-t-2" />
           <section className="mt-4">
-            <h2 className="text-[26px] font-bold text-ink mb-8">Related Products</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-[26px] font-bold text-[#1C1C1C]">Related Product</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Previous"
+                  onClick={() => relatedScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
+                  className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
+                >
+                  <ChevronRight className="h-4 w-4 rotate-180" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next"
+                  onClick={() => relatedScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
+                  className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div
+              ref={relatedScrollRef}
+              className="flex gap-6 overflow-x-auto pb-2"
+              style={{ scrollbarWidth: "none" }}
+            >
               {related.map((p) => {
-                const rp = p as any;
+                const rp = p as Product & { colors?: { id: number; value: string; swatche_value?: string | null }[] };
                 const sp = Number(rp.special_price ?? 0);
                 const rg = Number(rp.price ?? 0);
                 const pr = sp && rg && sp < rg ? sp : rg;
+                const sold = Number(p.no_of_ratings) || 0;
                 return (
-                  <Link key={p.id} href={`/product/${p.id}`} className="group flex flex-col cursor-pointer">
+                  <Link key={p.id} href={`/product/${p.id}`} className="group flex shrink-0 w-[230px] flex-col cursor-pointer">
                     <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[20px] bg-[#f9f9f9] border border-[#e7e7e7]">
                       <ProductImage
                         src={getCardImg(p)}
@@ -749,17 +775,40 @@ export default function ProductDetailClient({
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     </div>
-                    <div className="mt-4 flex flex-col gap-1">
+                    <div className="mt-4 flex flex-col gap-1.5">
                       <h3 className="text-[15px] font-medium text-ink truncate">{p.name}</h3>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-baseline gap-2">
                         <span className="text-[17px] font-bold text-ink">{fmt(pr)}</span>
+                        {sp > 0 && rg > sp && (
+                          <span className="text-[13px] text-[#8c8c8c] line-through">{fmt(rg)}</span>
+                        )}
                       </div>
-                      {Number(p.rating) > 0 && (
-                        <div className="flex items-center gap-1 text-[13px] text-[#605e5e]">
-                          <Star className="h-3.5 w-3.5 text-[#f5a524]" />
-                          {Number(p.rating).toFixed(1)}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-[12px] text-[#605e5e]">
+                        {Number(p.rating) > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <Star className="h-3.5 w-3.5 text-[#f5a524]" />
+                            {Number(p.rating).toFixed(1)}
+                          </span>
+                        )}
+                        {sold > 0 && (
+                          <>
+                            <span className="text-[#cfcfcf]">·</span>
+                            <span>{sold} Sold</span>
+                          </>
+                        )}
+                        {(rp.colors?.length ?? 0) > 0 && (
+                          <span className="ml-auto flex items-center gap-1.5 pr-2">
+                            {rp.colors!.slice(0, 4).map((c) => (
+                              <span
+                                key={c.id}
+                                title={c.value}
+                                className="h-[10px] w-[10px] rounded-full ring-1 ring-black/10"
+                                style={{ backgroundColor: c.swatche_value || "#cccccc" }}
+                              />
+                            ))}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </Link>
                 );
