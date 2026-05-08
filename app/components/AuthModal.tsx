@@ -13,7 +13,8 @@ function SubmitBtn({ busy, label }: { busy: boolean; label: string }) {
     <button
       type="button"
       disabled={busy}
-      className="h-[54px] w-[180px] rounded-[32px] bg-[#3E0149] flex items-center justify-center gap-4 text-white font-bold text-[15px] hover:brightness-110 transition-all shadow-lg uppercase disabled:opacity-60"
+      style={{ background: "linear-gradient(90deg, #9B96FF 0%, #1206FF 100%)" }}
+      className="h-[54px] w-[180px] rounded-[32px] flex items-center justify-center gap-4 text-white font-bold text-[15px] hover:brightness-110 transition-all shadow-lg uppercase disabled:opacity-60"
     >
       {busy ? "Please wait…" : label}
       {!busy && <ArrowRight className="h-5 w-5" />}
@@ -253,7 +254,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: { isOpen: bool
           {!(useOtp && otpStep === "verify") && (
             <p className="text-center text-[14px] text-[#8c8c8c]">
               {isSignin ? "Don't have an account?" : "Already have an account?"}{" "}
-              <button type="button" onClick={() => switchMode(isSignin ? "signup" : "signin")} className="font-bold text-brand-purple hover:underline">
+              <button type="button" onClick={() => switchMode(isSignin ? "signup" : "signin")} className="font-bold text-black hover:underline">
                 {isSignin ? "Sign up" : "Sign in"}
               </button>
             </p>

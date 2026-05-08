@@ -87,6 +87,9 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   // The trailing slash matters — without it this also matched /products (the
   // catalog page), giving the listing a mismatched white nav over a cream body.
   const isProductPage = pathname.startsWith("/product/");
+  // Catalog page uses a cream gradient body — give the nav the same starting
+  // tint so the gradient appears to begin at the top of the page.
+  const isProductsCatalog = pathname === "/products";
   // Pages that override the body background to white. Search bar uses a soft
   // grey here so it stays visible against the white surroundings.
   const isWhiteBody = isProductPage
@@ -221,7 +224,10 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   }
 
   return (
-    <header className={`w-full ${isProductPage ? "bg-white" : ""}`}>
+    <header
+      className={`w-full ${isProductPage ? "bg-white" : ""}`}
+      style={isProductsCatalog ? { background: "#FFF6DE" } : undefined}
+    >
       <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 md:px-8 md:pt-6">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3">

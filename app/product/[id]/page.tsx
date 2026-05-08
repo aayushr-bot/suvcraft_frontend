@@ -38,12 +38,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       ...(catId ? { category_id: catId } : {}),
     }).catch(() => ({ rows: [] as any[] })),
     api.productRatings(product!.id, 10).catch(() => ({ rows: [], summary: { total: 0, avg_rating: 0, r5: 0, r4: 0, r3: 0, r2: 0, r1: 0 } })),
-    api.popularProducts({ limit: 8, exclude: product!.id }).catch(() => ({ rows: [] as any[] })),
+    api.popularProducts({ limit: 16, exclude: product!.id }).catch(() => ({ rows: [] as any[] })),
     api.settings().catch(() => ({})),
   ]);
 
   const relatedFiltered = ((related as any).rows ?? []).filter((p: any) => p.id !== product!.id).slice(0, 12);
-  const popular = ((popularData as any).rows ?? []).filter((p: any) => p.id !== product!.id).slice(0, 4);
+  const popular = ((popularData as any).rows ?? []).filter((p: any) => p.id !== product!.id).slice(0, 12);
 
   return (
     <ProductDetailClient

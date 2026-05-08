@@ -15,6 +15,7 @@ import {
 } from "../../components/icons";
 import { IoMdHeartEmpty } from "react-icons/io";
 import { IoCart } from "react-icons/io5";
+import { SlLike, SlDislike } from "react-icons/sl";
 import { type ProductDetail, type Product, type ProductRating, type RatingSummary, imgUrl } from "@/lib/api";
 import { useCart } from "@/lib/cartContext";
 import { useWishlist } from "@/lib/wishlistContext";
@@ -77,12 +78,23 @@ function formatDate(s: string | undefined) {
 }
 
 function StarRow({ value, size = 14 }: { value: number; size?: number }) {
-  const v = Math.round(Number(value) || 0);
+  const v = Math.max(0, Math.min(5, Number(value) || 0));
   return (
     <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star key={n} className={n <= v ? "text-[#f5a524]" : "text-[#e0e0e0]"} style={{ width: size, height: size }} />
-      ))}
+      {[1, 2, 3, 4, 5].map((n) => {
+        // Fraction of THIS star that should be filled (0–1).
+        const fill = Math.max(0, Math.min(1, v - (n - 1)));
+        return (
+          <span key={n} className="relative inline-block" style={{ width: size, height: size }}>
+            <Star className="absolute inset-0 text-[#e0e0e0]" style={{ width: size, height: size }} />
+            {fill > 0 && (
+              <span className="absolute inset-0 overflow-hidden" style={{ width: `${fill * 100}%` }}>
+                <Star className="text-[#f5a524]" style={{ width: size, height: size }} />
+              </span>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -115,6 +127,64 @@ export default function ProductDetailClient({
 
   const { addToCart } = useCart();
   const relatedScrollRef = useRef<HTMLDivElement>(null);
+  const [relatedHasOverflow, setRelatedHasOverflow] = useState(false);
+  const popularScrollRef = useRef<HTMLDivElement>(null);
+  const [popularHasOverflow, setPopularHasOverflow] = useState(false);
+  const [reviewTab, setReviewTab] = useState<"all" | "photo" | "desc">("all");
+  const [reviewRatingFilter, setReviewRatingFilter] = useState<Set<number>>(new Set());
+  const [reviewTopicFilter, setReviewTopicFilter] = useState<Set<string>>(new Set());
+  const [reviewPage, setReviewPage] = useState(1);
+  const [ratingList, setRatingList] = useState<ProductRating[]>(ratings);
+
+  const voteOnRating = async (ratingId: number, currentVote: number, intent: 1 | -1) => {
+    if (!isAuthed) {
+      setShowAuth(true);
+      return;
+    }
+    // Toggle off when re-clicking the same direction; otherwise switch.
+    const next = currentVote === intent ? 0 : intent;
+    // Optimistic update so the UI feels instant.
+    setRatingList((list) =>
+      list.map((r) => {
+        if (r.id !== ratingId) return r;
+        const likeDelta = (next === 1 ? 1 : 0) - (currentVote === 1 ? 1 : 0);
+        const dislikeDelta = (next === -1 ? 1 : 0) - (currentVote === -1 ? 1 : 0);
+        return {
+          ...r,
+          like_count: Math.max(0, Number(r.like_count || 0) + likeDelta),
+          dislike_count: Math.max(0, Number(r.dislike_count || 0) + dislikeDelta),
+          user_vote: next,
+        };
+      })
+    );
+    try {
+      const res = await fetch(`${API}/api/v1/products/${product.id}/ratings/${ratingId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ value: next }),
+      });
+      const j = await res.json();
+      if (!j?.error && j?.data) {
+        setRatingList((list) =>
+          list.map((r) =>
+            r.id === ratingId
+              ? { ...r, like_count: Number(j.data.like_count), dislike_count: Number(j.data.dislike_count), user_vote: Number(j.data.user_vote) }
+              : r
+          )
+        );
+      }
+    } catch {
+      // Roll back on network error.
+      setRatingList((list) =>
+        list.map((r) =>
+          r.id === ratingId
+            ? { ...r, user_vote: currentVote, like_count: Math.max(0, Number(r.like_count || 0)), dislike_count: Math.max(0, Number(r.dislike_count || 0)) }
+            : r
+        )
+      );
+    }
+  };
   const [activeIdx, setActiveIdx] = useState(0);
   const activeImg = images[activeIdx] ?? images[0];
   function setActiveImg(img: string) {
@@ -183,6 +253,36 @@ export default function ProductDetailClient({
       .then((j) => setIsAuthed(Boolean(j?.data?.user)))
       .catch(() => setIsAuthed(false));
   }, []);
+
+  // Hide the related-products arrows when the row fits without scrolling.
+  useEffect(() => {
+    const el = relatedScrollRef.current;
+    if (!el) return;
+    const measure = () => setRelatedHasOverflow(el.scrollWidth - el.clientWidth > 1);
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [related.length]);
+
+  // Same for popular.
+  useEffect(() => {
+    const el = popularScrollRef.current;
+    if (!el) return;
+    const measure = () => setPopularHasOverflow(el.scrollWidth - el.clientWidth > 1);
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [popular.length]);
 
   const showToast = (msg: string) => {
     setPopupMsg(msg);
@@ -736,24 +836,26 @@ export default function ProductDetailClient({
           <section className="mt-4">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-[26px] font-bold text-[#1C1C1C]">Related Product</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Previous"
-                  onClick={() => relatedScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
-                  className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
-                >
-                  <ChevronRight className="h-4 w-4 rotate-180" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next"
-                  onClick={() => relatedScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
-                  className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+              {relatedHasOverflow && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Previous"
+                    onClick={() => relatedScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
+                    className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
+                  >
+                    <ChevronRight className="h-4 w-4 rotate-180" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next"
+                    onClick={() => relatedScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
+                    className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
             <div
               ref={relatedScrollRef}
@@ -768,7 +870,7 @@ export default function ProductDetailClient({
                 const sold = Number(p.no_of_ratings) || 0;
                 return (
                   <Link key={p.id} href={`/product/${p.id}`} className="group flex shrink-0 w-[230px] flex-col cursor-pointer">
-                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[20px] bg-[#f9f9f9] border border-[#e7e7e7]">
+                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[8px] bg-[#f9f9f9] border border-[#e7e7e7]">
                       <ProductImage
                         src={getCardImg(p)}
                         alt={p.name}
@@ -821,61 +923,274 @@ export default function ProductDetailClient({
       {/* Product Reviews */}
       <hr className="my-16 border-[#e7e7e7] border-dashed border-t-2" />
       <section>
-        <div className="flex flex-col gap-1 mb-8">
-          <h2 className="text-[26px] font-bold text-ink">Product Reviews</h2>
-          <p className="text-[13px] text-[#8c8c8c]">What buyers are saying about this product</p>
-        </div>
+        <h2 className="text-[26px] font-bold text-[#1C1C1C] mb-6">Product Review</h2>
 
         {ratingSummary && Number(ratingSummary.total) > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Summary card */}
-            <div className="lg:col-span-1 rounded-[16px] border border-[#e7e7e7] bg-[#fafafa] p-6">
-              <div className="flex items-baseline gap-2">
-                <span className="text-[44px] font-bold text-ink leading-none">{Number(ratingSummary.avg_rating).toFixed(1)}</span>
-                <span className="text-[14px] text-[#8c8c8c]">/ 5</span>
-              </div>
-              <div className="mt-2"><StarRow value={Number(ratingSummary.avg_rating)} size={18} /></div>
-              <p className="mt-1 text-[13px] text-[#8c8c8c]">{Number(ratingSummary.total)} {Number(ratingSummary.total) === 1 ? "review" : "reviews"}</p>
-
-              <div className="mt-6 flex flex-col gap-2">
-                {[5, 4, 3, 2, 1].map((star) => {
-                  const count = Number((ratingSummary as Record<string, number>)[`r${star}`] || 0);
-                  const pct = ratingSummary.total ? (count / Number(ratingSummary.total)) * 100 : 0;
-                  return (
-                    <div key={star} className="flex items-center gap-3 text-[12px]">
-                      <span className="w-8 text-[#525151]">{star}★</span>
-                      <div className="flex-1 h-2 rounded-full bg-[#eaeaea] overflow-hidden">
-                        <div className="h-full bg-[#f5a524] rounded-full" style={{ width: `${pct}%` }} />
+          <>
+            {/* Top summary card — circular avg + horizontal bars */}
+            {(() => {
+              const total = Number(ratingSummary.total);
+              const avg = Number(ratingSummary.avg_rating) || 0;
+              const pct = (avg / 5) * 100;
+              const fmtTotal = total >= 1000
+                ? `${(total / 1000).toFixed(2).replace(/\.?0+$/, "")}k`
+                : String(total);
+              const ringSize = 96;
+              const stroke = 6;
+              const radius = (ringSize - stroke) / 2;
+              const circ = 2 * Math.PI * radius;
+              return (
+                <div className="rounded-[14px] border-2 border-dashed border-[#e7e7e7] bg-white p-8 md:p-10 mb-8">
+                  <div className="flex flex-col md:flex-row md:items-center gap-6">
+                    {/* Left: circle + stars */}
+                    <div className="flex items-center gap-5 md:w-[280px] shrink-0">
+                      <div className="relative" style={{ width: ringSize, height: ringSize }}>
+                        <svg width={ringSize} height={ringSize} className="-rotate-90">
+                          <circle cx={ringSize / 2} cy={ringSize / 2} r={radius} stroke="#f0f0f0" strokeWidth={stroke} fill="none" />
+                          <circle
+                            cx={ringSize / 2}
+                            cy={ringSize / 2}
+                            r={radius}
+                            stroke="#f5a524"
+                            strokeWidth={stroke}
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeDasharray={circ}
+                            strokeDashoffset={circ - (pct / 100) * circ}
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center text-[24px] font-bold text-ink">
+                          {avg.toFixed(1)}
+                        </div>
                       </div>
-                      <span className="w-8 text-right text-[#8c8c8c]">{count}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Review list */}
-            <div className="lg:col-span-2 flex flex-col gap-4">
-              {ratings.map((r) => (
-                <div key={r.id} className="rounded-[14px] border border-[#e7e7e7] p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-brand-purple text-white font-semibold">
-                      {(r.username || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-[14px] font-semibold text-ink">{r.username || "Anonymous"}</div>
-                      <div className="flex items-center gap-2 text-[12px] text-[#8c8c8c]">
-                        <StarRow value={Number(r.rating)} size={12} />
-                        <span>·</span>
-                        <span>{formatDate(r.data_added)}</span>
+                      <div className="flex flex-col gap-1.5">
+                        <StarRow value={avg} size={16} />
+                        <span className="text-[13px] text-[#8c8c8c]">from {fmtTotal} reviews</span>
                       </div>
+                    </div>
+
+                    {/* Right: bars */}
+                    <div className="flex-1 flex flex-col gap-4">
+                      {[5, 4, 3, 2, 1].map((star) => {
+                        const count = Number((ratingSummary as Record<string, number>)[`r${star}`] || 0);
+                        const widthPct = total > 0 ? (count / total) * 100 : 0;
+                        return (
+                          <div key={star} className="flex items-center gap-3 text-[12px]">
+                            <span className="inline-flex items-center gap-1 w-10 text-[#525151] font-medium">
+                              {star.toFixed(1)}
+                              <Star className="h-3 w-3 text-[#f5a524]" />
+                            </span>
+                            <div className="flex-1 h-[8px] rounded-full bg-[#eaeaea] overflow-hidden">
+                              <div className="h-full bg-ink rounded-full" style={{ width: `${widthPct}%` }} />
+                            </div>
+                            <span className="w-12 text-right text-[#525151] font-medium">{count}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                  {r.comment && <p className="mt-3 text-[14px] leading-relaxed text-[#525151]">{r.comment}</p>}
                 </div>
-              ))}
+              );
+            })()}
+
+            {/* Two-column: filter + reviews */}
+            <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-8">
+              {/* Filter sidebar */}
+              <aside className="rounded-[12px] border-2 border-dashed border-[#e7e7e7] p-5 h-fit">
+                <h3 className="text-[15px] font-bold text-ink pb-4 mb-4 border-b border-[#eee]">Reviews Filter</h3>
+                <details open className="group">
+                  <summary className="flex items-center justify-between cursor-pointer list-none mb-3">
+                    <span className="text-[14px] font-semibold text-ink">Rating</span>
+                    <svg className="h-3.5 w-3.5 text-[#525151] transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 15l6-6 6 6" /></svg>
+                  </summary>
+                  <div className="flex flex-col gap-3 pl-1">
+                    {[5, 4, 3, 2, 1].map((star) => {
+                      const checked = reviewRatingFilter.has(star);
+                      return (
+                        <label key={star} className="flex items-center gap-2.5 cursor-pointer text-[13px] text-[#525151] hover:text-ink">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setReviewRatingFilter((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.delete(star); else next.add(star);
+                                return next;
+                              });
+                              setReviewPage(1);
+                            }}
+                            className="h-4 w-4 rounded border-[#cfcfcf]"
+                          />
+                          <Star className="h-4 w-4 text-[#f5a524]" />
+                          <span className="text-ink font-medium">{star}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </details>
+                <hr className="my-5 border-t border-dashed border-[#e7e7e7]" />
+                <details open className="group">
+                  <summary className="flex items-center justify-between cursor-pointer list-none mb-3">
+                    <span className="text-[14px] font-semibold text-ink">Review Topics</span>
+                    <svg className="h-3.5 w-3.5 text-[#525151] transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 15l6-6 6 6" /></svg>
+                  </summary>
+                  <div className="flex flex-col gap-3 pl-1">
+                    {["Product Quality", "Seller Services", "Product Price", "Shipment", "Match with Description"].map((topic) => {
+                      const checked = reviewTopicFilter.has(topic);
+                      return (
+                        <label key={topic} className="flex items-center gap-2.5 cursor-pointer text-[13px] text-[#525151] hover:text-ink">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setReviewTopicFilter((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.delete(topic); else next.add(topic);
+                                return next;
+                              });
+                            }}
+                            className="h-4 w-4 rounded border-[#cfcfcf]"
+                          />
+                          <span>{topic}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </details>
+              </aside>
+
+              {/* Right: tabs + reviews */}
+              <div className="flex flex-col gap-5">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <h3 className="text-[15px] font-bold text-ink">Review Lists</h3>
+                  <div className="flex items-center gap-2">
+                    {([
+                      { key: "all", label: "All Reviews" },
+                      { key: "photo", label: "With Photo & Video" },
+                      { key: "desc", label: "With Description" },
+                    ] as const).map((t) => {
+                      const active = reviewTab === t.key;
+                      return (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => { setReviewTab(t.key); setReviewPage(1); }}
+                          className={active
+                            ? "inline-flex h-[34px] items-center justify-center rounded-[6px] border border-ink bg-white px-4 text-[12px] font-semibold text-ink"
+                            : "inline-flex h-[34px] items-center justify-center rounded-[6px] border border-[#e7e7e7] bg-white px-4 text-[12px] font-medium text-[#525151] hover:border-ink hover:text-ink"
+                          }
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {(() => {
+                  // Apply tab + rating filters client-side over the loaded ratings.
+                  const filtered = ratingList.filter((r) => {
+                    if (reviewRatingFilter.size > 0 && !reviewRatingFilter.has(Math.round(Number(r.rating)))) return false;
+                    if (reviewTab === "photo" && !r.images) return false;
+                    if (reviewTab === "desc" && !(r.comment && r.comment.trim().length > 0)) return false;
+                    return true;
+                  });
+
+                  const perPage = 4;
+                  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+                  const safePage = Math.min(reviewPage, totalPages);
+                  const visible = filtered.slice((safePage - 1) * perPage, safePage * perPage);
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="rounded-[12px] border border-dashed border-[#e7e7e7] bg-[#fafafa] p-10 text-center">
+                        <p className="text-[14px] text-[#8c8c8c]">No reviews match these filters.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <div className="flex flex-col">
+                        {visible.map((r, idx) => (
+                          <div key={r.id} className={`flex flex-col gap-2 py-5 ${idx > 0 ? "border-t border-dashed border-[#e7e7e7]" : ""}`}>
+                            <StarRow value={Number(r.rating)} size={14} />
+                            {r.comment && <p className="text-[14px] font-medium text-ink leading-snug">{r.comment}</p>}
+                            <span className="text-[12px] text-[#8c8c8c]">{formatDate(r.data_added)}</span>
+                            <div className="mt-1 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-[28px] w-[28px] items-center justify-center rounded-full bg-brand-purple text-white text-[11px] font-semibold">
+                                  {(r.username || "U").charAt(0).toUpperCase()}
+                                </div>
+                                <span className="text-[13px] font-semibold text-ink">{r.username || "Anonymous"}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-[12px] text-[#525151]">
+                                {(() => {
+                                  const myVote = Number(r.user_vote || 0);
+                                  const liked = myVote === 1;
+                                  const disliked = myVote === -1;
+                                  return (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => voteOnRating(r.id, myVote, 1)}
+                                        className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border bg-white px-3 text-[12px] font-medium transition-colors ${liked ? "border-ink text-ink" : "border-[#e7e7e7] text-ink hover:border-ink"}`}
+                                      >
+                                        <SlLike className="h-4 w-4" />
+                                        {Number(r.like_count || 0)}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => voteOnRating(r.id, myVote, -1)}
+                                        className={`inline-flex h-[34px] items-center gap-1.5 rounded-[8px] border bg-white px-3 text-[12px] font-medium transition-colors ${disliked ? "border-ink text-ink" : "border-[#e7e7e7] text-[#525151] hover:border-ink hover:text-ink"}`}
+                                      >
+                                        <SlDislike className="h-4 w-4" />
+                                        {Number(r.dislike_count || 0)}
+                                      </button>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-center gap-1.5 mt-4">
+                          {Array.from({ length: totalPages }).map((_, i) => {
+                            const page = i + 1;
+                            const active = page === safePage;
+                            return (
+                              <button
+                                key={page}
+                                type="button"
+                                onClick={() => setReviewPage(page)}
+                                className={active
+                                  ? "flex h-[34px] w-[34px] items-center justify-center rounded-[6px] bg-ink text-[12px] font-semibold text-white"
+                                  : "flex h-[34px] w-[34px] items-center justify-center rounded-[6px] border border-[#e7e7e7] text-[12px] font-medium text-[#525151] hover:border-ink hover:text-ink"
+                                }
+                              >
+                                {page}
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => setReviewPage(Math.min(totalPages, safePage + 1))}
+                            disabled={safePage >= totalPages}
+                            className="flex h-[34px] w-[34px] items-center justify-center rounded-[6px] border border-[#e7e7e7] text-[#525151] hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
             </div>
-          </div>
+          </>
         ) : (
           <div className="rounded-[14px] border border-dashed border-[#e7e7e7] bg-[#fafafa] p-10 text-center">
             <div className="text-[40px] mb-2">⭐</div>
@@ -890,32 +1205,47 @@ export default function ProductDetailClient({
         <>
           <hr className="my-16 border-[#e7e7e7] border-dashed border-t-2" />
           <section>
-            <div className="flex items-end justify-between mb-8">
-              <div>
-                <h2 className="text-[26px] font-bold text-ink">Popular This Week</h2>
-                <p className="text-[13px] text-[#8c8c8c] mt-1">Trending picks loved by other shoppers</p>
-              </div>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-[26px] font-bold text-[#1C1C1C]">Popular This Week</h2>
+              {popularHasOverflow && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Previous"
+                    onClick={() => popularScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" })}
+                    className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
+                  >
+                    <ChevronRight className="h-4 w-4 rotate-180" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next"
+                    onClick={() => popularScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" })}
+                    className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[#cfcfcf] text-ink hover:bg-black/5"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div
+              ref={popularScrollRef}
+              className="flex gap-6 overflow-x-auto pb-2"
+              style={{ scrollbarWidth: "none" }}
+            >
               {popular.map((p) => {
-                const rp = p as Product;
+                const rp = p as Product & { colors?: { id: number; value: string; swatche_value?: string | null }[] };
                 const sp = Number(rp.special_price ?? 0);
                 const rg = Number(rp.price ?? 0);
                 const pr = sp && rg && sp < rg ? sp : rg;
                 return (
-                  <Link key={p.id} href={`/product/${p.id}`} className="group flex flex-col cursor-pointer">
-                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[20px] bg-[#f9f9f9] border border-[#e7e7e7]">
+                  <Link key={p.id} href={`/product/${p.id}`} className="group relative flex shrink-0 w-[230px] flex-col cursor-pointer">
+                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[8px] bg-[#f9f9f9] border border-[#e7e7e7]">
                       <ProductImage
                         src={getCardImg(p)}
                         alt={p.name}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
-                      {Number(p.no_of_ratings) > 0 && (
-                        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm">
-                          <Star className="h-3 w-3 text-[#f5a524]" />
-                          {Number(p.rating).toFixed(1)}
-                        </span>
-                      )}
                       {/* Quick wishlist + add-to-cart buttons */}
                       <div className="absolute right-3 top-3 z-10 flex flex-col items-center gap-1.5">
                         <button
@@ -960,12 +1290,32 @@ export default function ProductDetailClient({
                         </button>
                       </div>
                     </div>
-                    <div className="mt-4 flex flex-col gap-1">
+                    <div className="mt-4 flex flex-col gap-1.5">
                       <h3 className="text-[15px] font-medium text-ink truncate group-hover:underline">{p.name}</h3>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-baseline gap-2">
                         <span className="text-[17px] font-bold text-ink">{fmt(pr)}</span>
                         {sp > 0 && rg > sp && (
                           <span className="text-[13px] text-[#8c8c8c] line-through">{fmt(rg)}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-[12px] text-[#605e5e]">
+                        {Number(p.rating) > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <Star className="h-3.5 w-3.5 text-[#f5a524]" />
+                            {Number(p.rating).toFixed(1)}
+                          </span>
+                        )}
+                        {(rp.colors?.length ?? 0) > 0 && (
+                          <span className="ml-auto flex items-center gap-1.5 pr-2">
+                            {rp.colors!.slice(0, 4).map((c) => (
+                              <span
+                                key={c.id}
+                                title={c.value}
+                                className="h-[10px] w-[10px] rounded-full ring-1 ring-black/10"
+                                style={{ backgroundColor: c.swatche_value || "#cccccc" }}
+                              />
+                            ))}
+                          </span>
                         )}
                       </div>
                     </div>

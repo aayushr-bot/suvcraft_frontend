@@ -236,6 +236,9 @@ export type ProductRating = {
   data_added: string;
   username: string;
   user_image?: string;
+  like_count?: number;
+  dislike_count?: number;
+  user_vote?: number;
 };
 
 export type RatingSummary = {
