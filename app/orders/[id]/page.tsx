@@ -22,6 +22,8 @@ type OrderItem = {
   product_image?: string;
   current_status?: string;
   status_history?: StatusEntry[];
+  size?: string;
+  color?: { name: string; swatch?: string };
 };
 
 type TrackingEntry = {
@@ -316,7 +318,22 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                   <div className="flex flex-1 min-w-0 flex-col">
                     <h4 className="text-[14px] font-semibold text-ink line-clamp-2">{it.product_name}</h4>
-                    {it.variant_name && <span className="text-[12px] text-[#8c8c8c] mt-0.5">{it.variant_name}</span>}
+                    {(it.size || it.color) && (
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {it.size && (
+                          <span className="inline-flex items-center gap-1 rounded-[6px] bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-medium text-ink">
+                            <span className="text-[#878787]">Size :</span> {it.size}
+                          </span>
+                        )}
+                        {it.color && (
+                          <span className="inline-flex items-center gap-1 rounded-[6px] bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-medium text-ink">
+                            <span className="text-[#878787]">Color :</span>
+                            <span className="inline-block h-3 w-3 rounded-full ring-1 ring-black/10" style={{ backgroundColor: it.color.swatch || "#e7e7e7" }} />
+                            <span>{it.color.name}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="mt-1 flex items-center gap-3 text-[12px] text-[#525151]">
                       <span>Qty: {it.quantity}</span>
                       <span className="text-[#cfcfcf]">•</span>

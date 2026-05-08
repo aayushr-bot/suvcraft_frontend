@@ -13,6 +13,8 @@ import {
   Star,
   CheckCircleSolid,
 } from "../../components/icons";
+import { IoMdHeartEmpty } from "react-icons/io";
+import { IoCart } from "react-icons/io5";
 import { type ProductDetail, type Product, type ProductRating, type RatingSummary, imgUrl } from "@/lib/api";
 import { useCart } from "@/lib/cartContext";
 import { useWishlist } from "@/lib/wishlistContext";
@@ -91,15 +93,16 @@ export default function ProductDetailClient({
   ratings = [],
   ratingSummary,
   popular = [],
+  settings = {},
 }: {
   product: ProductDetail;
   related: Product[];
   ratings?: ProductRating[];
   ratingSummary?: RatingSummary;
   popular?: Product[];
+  settings?: Record<string, unknown>;
 }) {
   const images = parseImages(product);
-  const { current, original } = getPrice(product);
 
   const minQty = Math.max(1, Number(product.minimum_order_quantity) || 1);
   const stepSize = Math.max(1, Number(product.quantity_step_size) || 1);
@@ -111,13 +114,64 @@ export default function ProductDetailClient({
   const isOutOfStock = product.stock === 0 || maxQty < minQty;
 
   const { addToCart } = useCart();
-  const [activeImg, setActiveImg] = useState(images[0]);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const activeImg = images[activeIdx] ?? images[0];
+  function setActiveImg(img: string) {
+    const i = images.indexOf(img);
+    if (i >= 0) setActiveIdx(i);
+  }
   const [qty, setQty] = useState(minQty);
   const [showCartPopup, setShowCartPopup] = useState(false);
   const [popupMsg, setPopupMsg] = useState("Product added to cart.");
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [qtyError, setQtyError] = useState("");
+  // Pull attribute groups from the backend. We treat any attribute whose values
+  // have swatche_type === "color" (or attribute name like "Color") as the color
+  // swatch row, everything else as a text-pill row (Size, Material, etc.).
+  const attributeOptions = product.attribute_options || [];
+  const colorAttr = attributeOptions.find((a) =>
+    a.name.toLowerCase().includes("color") ||
+    a.values.some((v) => String(v.swatche_type || "").toLowerCase() === "color")
+  );
+  const sizeAttr = attributeOptions.find((a) => a !== colorAttr);
+
+  // Pre-select the first color so the price + swatch reflect a real variant
+  // immediately. Size stays unselected so the user is forced to pick one.
+  const [selectedColorId, setSelectedColorId] = useState<number | null>(
+    colorAttr?.values[0]?.id ?? null,
+  );
+  const [selectedSizeId, setSelectedSizeId] = useState<number | null>(null);
+  const [showFullDesc, setShowFullDesc] = useState(false);
+  const [showSizeChart, setShowSizeChart] = useState(false);
+  const [showDeliveryTerms, setShowDeliveryTerms] = useState(false);
+  const selectedColor = colorAttr?.values.find((v) => v.id === selectedColorId) || null;
+  const selectedSize = sizeAttr?.values.find((v) => v.id === selectedSizeId) || null;
+
+  // Match the picked color + size back to a specific variant row so we can show
+  // its price + stock instead of the product-wide minimum. Falls back to the
+  // first variant when nothing is selected (or when no variants exist).
+  const variants = product.variants || [];
+  const matchedVariant = (() => {
+    const wanted = [selectedColorId, selectedSizeId].filter((n): n is number => !!n);
+    if (!wanted.length) return variants[0] || null;
+    return (
+      variants.find((v) => wanted.every((id) => v.attribute_value_ids.includes(id))) ||
+      variants[0] ||
+      null
+    );
+  })();
+
+  // Variant price wins when present; otherwise fall back to the product-level price.
+  const { current, original } = (() => {
+    if (matchedVariant) {
+      const sp = Number(matchedVariant.special_price ?? 0);
+      const rg = Number(matchedVariant.price ?? 0);
+      if (sp && rg && sp < rg) return { current: sp, original: rg };
+      if (rg) return { current: rg, original: 0 };
+    }
+    return getPrice(product);
+  })();
 
   const wishlist = useWishlist();
   const isWishlisted = wishlist.has(product.id);
@@ -147,6 +201,14 @@ export default function ProductDetailClient({
       setQtyError("This product is out of stock.");
       return;
     }
+    if (colorAttr && colorAttr.values.length > 0 && !selectedColorId) {
+      setQtyError(`Please select a ${colorAttr.name.toLowerCase()}.`);
+      return;
+    }
+    if (sizeAttr && sizeAttr.values.length > 0 && !selectedSizeId) {
+      setQtyError(`Please select a ${sizeAttr.name.toLowerCase()}.`);
+      return;
+    }
     if (qty < minQty) {
       setQtyError(`Minimum order quantity is ${minQty}.`);
       return;
@@ -168,6 +230,11 @@ export default function ProductDetailClient({
         stock: product.stock,
         tax_percentage: Number(product.tax_percentage || 0),
         is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
+        size: selectedSize?.value,
+        color: selectedColor
+          ? { name: selectedColor.value, swatch: String(selectedColor.swatche_value || "").trim() || undefined }
+          : undefined,
+        variant_id: matchedVariant?.id,
       },
       qty,
     );
@@ -234,6 +301,14 @@ export default function ProductDetailClient({
       setQtyError("This product is out of stock.");
       return;
     }
+    if (colorAttr && colorAttr.values.length > 0 && !selectedColorId) {
+      setQtyError(`Please select a ${colorAttr.name.toLowerCase()}.`);
+      return;
+    }
+    if (sizeAttr && sizeAttr.values.length > 0 && !selectedSizeId) {
+      setQtyError(`Please select a ${sizeAttr.name.toLowerCase()}.`);
+      return;
+    }
     if (qty < minQty) {
       setQtyError(`Minimum order quantity is ${minQty}.`);
       return;
@@ -259,6 +334,11 @@ export default function ProductDetailClient({
         stock: product.stock,
         tax_percentage: Number(product.tax_percentage || 0),
         is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
+        size: selectedSize?.value,
+        color: selectedColor
+          ? { name: selectedColor.value, swatch: String(selectedColor.swatche_value || "").trim() || undefined }
+          : undefined,
+        variant_id: matchedVariant?.id,
       },
       qty,
     );
@@ -291,14 +371,17 @@ export default function ProductDetailClient({
       {/* Main Product Section */}
       <div className="mt-8 flex flex-col items-start gap-8 md:flex-row lg:gap-12">
         {/* Left: Images */}
-        <div className="w-full md:w-1/2 flex flex-col gap-6">
+        <div className="w-full md:w-[42%] flex flex-col gap-6 md:sticky md:top-24 md:self-start">
           <div className="flex gap-4">
             <div
-              className="relative flex aspect-[4/5] flex-1 items-center justify-center rounded-[20px] border border-[#e7e7e7] overflow-hidden bg-[#f9f9f9] shadow-sm"
+              className="relative flex aspect-square flex-1 items-center justify-center overflow-hidden bg-[#f9f9f9]"
             >
               <div
-                className="absolute top-0 right-0 z-10 flex h-11 items-center justify-center bg-gradient-to-r from-[#FFF3B8] to-[#FFE602] px-8 pr-12 text-[15px] font-bold text-ink shadow-sm"
-                style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%, 8% 50%)" }}
+                className="absolute top-0 right-0 z-10 flex h-11 items-center justify-center px-8 pr-12 text-[15px] font-bold text-ink shadow-sm"
+                style={{
+                  background: "linear-gradient(90deg, #FFF3B8 0%, #FFE602 100%)",
+                  clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 100%, 8% 50%)",
+                }}
               >
                 Trusted Seller
               </div>
@@ -309,7 +392,7 @@ export default function ProductDetailClient({
               <button
                 onClick={handleShare}
                 aria-label="Share product"
-                className="flex h-[52px] w-[52px] items-center justify-center rounded-[10px] bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0] shadow-sm"
+                className="flex h-[52px] w-[52px] items-center justify-center rounded-[5px] bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0] shadow-sm"
               >
                 <ShareIcon className="h-6 w-6" />
               </button>
@@ -317,10 +400,30 @@ export default function ProductDetailClient({
                 onClick={handleWishlist}
                 aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
                 aria-pressed={isWishlisted}
-                className={`flex h-[52px] w-[52px] items-center justify-center rounded-[10px] shadow-sm transition-colors ${isWishlisted ? "bg-[#fdecec] text-red-500 hover:bg-[#fadcdc]" : "bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0]"}`}
+                className={`flex h-[52px] w-[52px] items-center justify-center rounded-[5px] shadow-sm transition-colors ${isWishlisted ? "bg-[#fdecec] text-red-500 hover:bg-[#fadcdc]" : "bg-[#f5f5f5] text-ink hover:bg-[#e0e0e0]"}`}
               >
                 {isWishlisted ? <HeartFill className="h-6 w-6" /> : <HeartLine className="h-6 w-6" />}
               </button>
+              {images.length > 1 && (
+                <div className="mt-auto flex flex-col gap-3">
+                  <button
+                    type="button"
+                    aria-label="Next image"
+                    onClick={() => setActiveIdx((i) => (i + 1) % images.length)}
+                    className="flex h-[44px] w-[44px] items-center justify-center rounded-[4px] bg-[#F2F2F2] text-ink hover:bg-[#e7e7e7]"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Previous image"
+                    onClick={() => setActiveIdx((i) => (i - 1 + images.length) % images.length)}
+                    className="flex h-[44px] w-[44px] items-center justify-center rounded-[4px] bg-[#F2F2F2] text-ink hover:bg-[#e7e7e7]"
+                  >
+                    <ChevronRight className="h-4 w-4 rotate-180" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -331,7 +434,7 @@ export default function ProductDetailClient({
                 <button
                   key={i}
                   onClick={() => setActiveImg(img)}
-                  className={`relative flex aspect-square w-[100px] shrink-0 items-center justify-center rounded-[12px] border ${activeImg === img ? "border-ink" : "border-[#e7e7e7]"} bg-[#f9f9f9] overflow-hidden shadow-sm transition-all`}
+                  className={`relative flex aspect-square w-[100px] shrink-0 items-center justify-center bg-[#f9f9f9] overflow-hidden transition-all ${activeImg === img ? "opacity-100" : "opacity-70 hover:opacity-100"}`}
                 >
                   <ProductImage src={img} alt={`view ${i + 1}`} className="h-full w-full object-cover" />
                 </button>
@@ -341,29 +444,44 @@ export default function ProductDetailClient({
         </div>
 
         {/* Right: Info */}
-        <div className="w-full md:w-1/2 flex flex-col gap-6">
+        <div className="w-full md:flex-1 flex flex-col gap-6">
           <div>
             {product.short_description && (
               <div className="mb-2 text-[13px] text-[#525151]">{product.short_description}</div>
             )}
-            <div className="flex items-start justify-between">
-              <h1 className="text-[28px] font-semibold leading-tight text-ink md:text-[32px]">
-                {product.name}
-              </h1>
-              <div className="flex flex-col items-end pt-1 ml-4 shrink-0">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-[28px] font-semibold leading-tight text-ink md:text-[32px]">
+                  {product.name}
+                </h1>
+                <div className="mt-3 flex items-center gap-3">
+                  {original > 0 && (
+                    <span className="text-[16px] text-[#8c8c8c] line-through">{fmt(original)}</span>
+                  )}
+                  <span className="text-[26px] font-bold text-ink">{fmt(current)}</span>
+                  {original > 0 && (
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[12px] font-semibold text-green-700">
+                      {Math.round(((original - current) / original) * 100)}% off
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-2 pt-1 shrink-0">
                 {Number(product.rating) > 0 && (
                   <div className="flex items-center gap-1 text-[18px] font-bold text-ink">
                     <Star className="h-5 w-5 text-[#f5a524]" />
                     {Number(product.rating).toFixed(1)}
                   </div>
                 )}
-                <div className="mt-2 inline-flex items-center gap-1.5 rounded-[4px] bg-[#fdf2f8] px-2 py-1 text-[11px] font-semibold text-[#8b005d] ring-1 ring-[#fbcfe8]">
-                  Fulfilled by <span className="font-bold text-brand-purple ml-1">SUVCRAFT</span>
+                <div className="inline-flex flex-col items-center gap-1.5">
+                  <span className="text-[14px] font-medium text-ink leading-none">Fulfilled by</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/figma/suvcraft-logo2.png" alt="Suvcraft" className="h-8 w-auto" />
                 </div>
               </div>
             </div>
 
-            <div className="mt-2 flex items-center gap-3">
+            <div className="hidden items-center gap-3">
               {original > 0 && (
                 <span className="text-[14px] text-[#8c8c8c] line-through">{fmt(original)}</span>
               )}
@@ -377,13 +495,86 @@ export default function ProductDetailClient({
           </div>
 
           {/* Description */}
-          {product.description && (
-            <div className="border-t-2 border-dashed border-[#e7e7e7] pt-6">
-              <h3 className="mb-3 text-[18px] font-semibold text-ink">Description :</h3>
-              <div
-                className="text-[13px] leading-relaxed text-[#525151] prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: product.description }}
-              />
+          {product.description && (() => {
+            const plain = product.description.replace(/<[^>]*>/g, "").trim();
+            const isLong = plain.length > 280;
+            return (
+              <div className="border-t-2 border-dashed border-[#e7e7e7] pt-6">
+                <h3 className="mb-3 text-[18px] font-semibold text-ink">Description :</h3>
+                <div
+                  className={`text-[13px] leading-relaxed text-[#525151] prose prose-sm max-w-none ${isLong && !showFullDesc ? "line-clamp-4" : ""}`}
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
+                {isLong && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullDesc((v) => !v)}
+                    className="mt-1 text-[13px] font-semibold text-[#242424] underline underline-offset-2 hover:text-black"
+                  >
+                    {showFullDesc ? "See Less" : "See More..."}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Color */}
+          {colorAttr && colorAttr.values.length > 0 && (
+            <div>
+              <div className="mb-3 text-[15px] text-[#525151]">
+                {colorAttr.name} : <span className="font-bold text-ink">{selectedColor?.value || colorAttr.values[0].value}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {colorAttr.values.map((v) => {
+                  const active = selectedColorId === v.id;
+                  // Use the swatche_value (hex) when present; fall back to a
+                  // light grey so the swatch is still visible.
+                  const swatch = (v.swatche_value || "").trim() || "#e7e7e7";
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      aria-label={`${colorAttr.name} ${v.value}`}
+                      onClick={() => { setSelectedColorId(v.id); setQtyError(""); }}
+                      style={{ backgroundColor: swatch }}
+                      className={`h-[28px] w-[64px] cursor-pointer rounded-[2px] transition-all ${active ? "ring-[1.5px] ring-black ring-offset-4 ring-offset-white" : "border border-[#e7e7e7] hover:border-ink/40"}`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Size */}
+          {sizeAttr && sizeAttr.values.length > 0 && (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[15px] font-medium text-ink">{sizeAttr.name} :</span>
+                {product.size_chart ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowSizeChart(true)}
+                    className="font-sans text-[14px] md:text-[16px] font-normal leading-none tracking-normal text-[#666666] underline underline-offset-4 hover:text-ink cursor-pointer"
+                  >
+                    View Size Chart
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {sizeAttr.values.map((v) => {
+                  const active = selectedSizeId === v.id;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => { setSelectedSizeId(v.id); setQtyError(""); }}
+                      className={`inline-flex h-[40px] min-w-[56px] cursor-pointer items-center justify-center rounded-[5px] border px-3 text-[13px] font-semibold transition-colors ${active ? "border-ink bg-ink text-white" : "border-[#d4d4d4] bg-white text-ink hover:border-ink"}`}
+                    >
+                      {v.value}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -447,20 +638,89 @@ export default function ProductDetailClient({
             <button
               onClick={handleAddToCart}
               disabled={product.stock === 0}
-              className="inline-flex h-[54px] flex-1 items-center justify-center rounded-[10px] bg-ink text-[16px] font-bold text-white hover:bg-black disabled:opacity-50"
+              className="inline-flex h-[64px] flex-1 cursor-pointer items-center justify-center rounded-[8px] border border-ink bg-white text-[16px] font-medium text-ink hover:bg-[#fafafa] disabled:opacity-50"
             >
               {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
             </button>
             <button
               onClick={handleBuyNow}
               disabled={product.stock === 0}
-              className="inline-flex h-[54px] w-[160px] items-center justify-center rounded-[10px] border border-ink text-[16px] font-bold text-ink hover:bg-black/5 disabled:opacity-50"
+              className="inline-flex h-[64px] flex-1 cursor-pointer items-center justify-center rounded-[8px] bg-ink text-[16px] font-medium text-white hover:bg-black disabled:opacity-50"
             >
               Buy Now
             </button>
           </div>
 
-          <div className="text-[13px] text-[#8c8c8c]">
+          {(settings as { delivery_terms?: string }).delivery_terms ? (
+            <button
+              type="button"
+              onClick={() => setShowDeliveryTerms(true)}
+              className="self-start text-[14px] text-[#666666] underline underline-offset-4 hover:text-ink cursor-pointer"
+            >
+              Delivery T&amp;C
+            </button>
+          ) : null}
+
+          {/* Trust badges row — admin-controlled via the same settings as the home FeatureStrip. */}
+          {(() => {
+            const s = settings as Record<string, unknown>;
+            const num = (k: string) => Number((s[k] as number | string | undefined) ?? 0);
+            const str = (k: string) => String((s[k] as string | undefined) || "");
+            const items = [
+              { key: "shipping", title: str("shipping_title"), desc: str("shipping_description"), enabled: num("shipping_mode") === 1 },
+              { key: "return",   title: str("return_title"),   desc: str("return_description"),   enabled: num("return_mode")   === 1 },
+              { key: "safety",   title: str("safety_security_title"), desc: str("safety_security_description"), enabled: num("safety_security_mode") === 1 },
+              { key: "support",  title: str("support_title"),  desc: str("support_description"),  enabled: num("support_mode")  === 1 },
+            ].filter((i) => i.enabled && i.title);
+
+            const ICONS: Record<string, React.ReactElement> = {
+              shipping: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                  <path d="M3 7h11v9H3z" />
+                  <path d="M14 10h4l3 3v3h-7z" />
+                  <circle cx="7" cy="18" r="1.8" />
+                  <circle cx="17" cy="18" r="1.8" />
+                </svg>
+              ),
+              return: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                  <path d="M9 14L4 9l5-5" />
+                  <path d="M4 9h10a6 6 0 0 1 6 6v0a6 6 0 0 1-6 6H8" />
+                </svg>
+              ),
+              safety: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                  <path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z" />
+                  <path d="M9 12l2 2 4-4" />
+                </svg>
+              ),
+              support: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                  <path d="M4 12a8 8 0 1 1 16 0v4a3 3 0 0 1-3 3h-1v-7h4" />
+                  <path d="M4 16a3 3 0 0 0 3 3h1v-7H4z" />
+                </svg>
+              ),
+            };
+
+            if (!items.length) return null;
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4">
+                {items.map((it) => (
+                  <div key={it.key} className="flex flex-col items-center gap-3 text-center">
+                    <div className="flex h-[56px] w-[56px] items-center justify-center rounded-full bg-brand-purple text-white">
+                      {ICONS[it.key]}
+                    </div>
+                    <div>
+                      <div className="text-[14px] font-bold text-ink">{it.title}</div>
+                      {it.desc && <div className="mt-0.5 text-[12px] text-[#605e5e]">{it.desc}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          <div className="hidden text-[13px] text-[#8c8c8c]">
             {product.is_returnable ? "✓ Returns accepted" : "No returns"}
             {" · "}
             {product.cod_allowed ? "✓ Cash on delivery available" : "Online payment only"}
@@ -607,6 +867,49 @@ export default function ProductDetailClient({
                           {Number(p.rating).toFixed(1)}
                         </span>
                       )}
+                      {/* Quick wishlist + add-to-cart buttons */}
+                      <div className="absolute right-3 top-3 z-10 flex flex-col items-center gap-1.5">
+                        <button
+                          type="button"
+                          aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            wishlist.toggle({
+                              id: p.id,
+                              name: p.name,
+                              image: p.image,
+                              slug: p.slug,
+                              price: Number(rp.special_price ?? 0) || Number(rp.price ?? 0),
+                              list_price: Number(rp.price ?? 0) || undefined,
+                              status: p.status,
+                            });
+                          }}
+                          className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-white shadow-sm hover:bg-[#fafafa]"
+                        >
+                          {wishlist.has(p.id)
+                            ? <HeartFill className="h-[18px] w-[18px] text-[#D90A0A]" />
+                            : <IoMdHeartEmpty className="h-[18px] w-[18px] text-[#a3a3a3]" />}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Add to cart"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            addToCart({
+                              id: p.id,
+                              name: p.name,
+                              image: p.image || "",
+                              price: Number(rp.special_price ?? 0) || Number(rp.price ?? 0),
+                            }, 1);
+                            showToast("Product added to cart.");
+                          }}
+                          className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-white shadow-sm hover:bg-[#fafafa] text-ink"
+                        >
+                          <IoCart className="h-[18px] w-[18px]" />
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-4 flex flex-col gap-1">
                       <h3 className="text-[15px] font-medium text-ink truncate group-hover:underline">{p.name}</h3>
@@ -622,6 +925,72 @@ export default function ProductDetailClient({
               })}
             </div>
           </section>
+        </>
+      )}
+
+      {showSizeChart && product.size_chart && (
+        <>
+          <div
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowSizeChart(false)}
+          />
+          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none">
+            <div className="relative flex max-h-[90vh] w-full max-w-[720px] flex-col rounded-[12px] bg-white shadow-2xl pointer-events-auto">
+              {/* Sticky header */}
+              <div className="flex items-center justify-between border-b border-[#eee] px-6 py-4">
+                <h3 className="text-[18px] font-bold text-ink">Size Chart</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowSizeChart(false)}
+                  aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#525151] hover:bg-[#f5f5f5]"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {/* Scrollable body — both vertical (long content) and horizontal (wide tables on mobile) */}
+              <div
+                className="flex-1 overflow-y-auto overflow-x-auto px-6 py-5 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-[#e7e7e7] [&_th]:bg-[#f9f9f9] [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_td]:border [&_td]:border-[#e7e7e7] [&_td]:px-3 [&_td]:py-2 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-[8px] prose prose-sm max-w-none text-[14px] text-ink"
+                style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}
+              >
+                <div dangerouslySetInnerHTML={{ __html: product.size_chart }} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {showDeliveryTerms && (settings as { delivery_terms?: string }).delivery_terms && (
+        <>
+          <div
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowDeliveryTerms(false)}
+          />
+          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none">
+            <div className="relative flex max-h-[90vh] w-full max-w-[720px] flex-col rounded-[12px] bg-white shadow-2xl pointer-events-auto">
+              <div className="flex items-center justify-between border-b border-[#eee] px-6 py-4">
+                <h3 className="text-[18px] font-bold text-ink">Delivery T&amp;C</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowDeliveryTerms(false)}
+                  aria-label="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#525151] hover:bg-[#f5f5f5]"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div
+                className="flex-1 overflow-y-auto overflow-x-auto px-6 py-5 prose prose-sm max-w-none text-[14px] text-ink [&_a]:text-brand-purple [&_a]:underline [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-[#e7e7e7] [&_th]:bg-[#f9f9f9] [&_th]:px-3 [&_th]:py-2 [&_td]:border [&_td]:border-[#e7e7e7] [&_td]:px-3 [&_td]:py-2"
+                style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}
+              >
+                <div dangerouslySetInnerHTML={{ __html: (settings as { delivery_terms?: string }).delivery_terms || "" }} />
+              </div>
+            </div>
+          </div>
         </>
       )}
 
@@ -643,6 +1012,11 @@ export default function ProductDetailClient({
         stock: product.stock,
         tax_percentage: Number(product.tax_percentage || 0),
         is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
+        size: selectedSize?.value,
+        color: selectedColor
+          ? { name: selectedColor.value, swatch: String(selectedColor.swatche_value || "").trim() || undefined }
+          : undefined,
+        variant_id: matchedVariant?.id,
       },
       qty,
     );

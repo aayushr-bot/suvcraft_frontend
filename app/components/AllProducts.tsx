@@ -5,9 +5,9 @@ import { BoltIcon, CheckCircleSolid, ChevronRight, HeartFill, Star, TagIcon } fr
 import { IoMdHeartEmpty } from "react-icons/io";
 import { IoCart } from "react-icons/io5";
 import ProductImage from "./ProductImage";
+import QuickAddModal from "./QuickAddModal";
 import { type Product, type Category, type CategoryTab, imgUrl } from "@/lib/api";
 import { useWishlist } from "@/lib/wishlistContext";
-import { useCart } from "@/lib/cartContext";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 // <Link> auto-prefixes basePath, but window.location.href does NOT.
@@ -33,7 +33,6 @@ function getPrice(p: Product) {
   return { price: price ? fmt(price) : "—", original: "", raw: price };
 }
 
-const swatches = ["#d64545", "#245cbf", "#e5b83a"];
 const CARD_WIDTH = 260 + 16;
 
 export default function AllProducts({
@@ -51,9 +50,9 @@ export default function AllProducts({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wishlist = useWishlist();
-  const { addToCart } = useCart();
   const [toast, setToast] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [quickAddId, setQuickAddId] = useState<number | null>(null);
 
   function flashToast(msg: string) {
     setToast(msg);
@@ -76,16 +75,10 @@ export default function AllProducts({
     });
   };
 
-  const quickAddToCart = (e: React.MouseEvent, p: Product) => {
+  const openQuickAdd = (e: React.MouseEvent, p: Product) => {
     e.stopPropagation();
     e.preventDefault();
-    addToCart({
-      id: p.id,
-      name: p.name,
-      image: p.image || "",
-      price: Number(p.special_price ?? 0) || Number(p.price ?? 0),
-    }, 1);
-    flashToast("Product added to cart.");
+    setQuickAddId(p.id);
   };
 
   // Track current scroll position so the progress bar fills, prev/next can
@@ -246,7 +239,7 @@ export default function AllProducts({
                   <button
                     type="button"
                     aria-label="Add to cart"
-                    onClick={(e) => quickAddToCart(e, p)}
+                    onClick={(e) => openQuickAdd(e, p)}
                     className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
                   >
                     <IoCart className="h-[18px] w-[18px] text-white" />
@@ -268,11 +261,18 @@ export default function AllProducts({
                       <Star className="h-3 w-3 text-[#f5a524]" />
                       {p.rating ?? "4.9"}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      {swatches.map((c) => (
-                        <span key={c} className="h-[10px] w-[10px] rounded-full ring-1 ring-black/10" style={{ backgroundColor: c }} />
-                      ))}
-                    </div>
+                    {(p.colors?.length ?? 0) > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        {p.colors!.map((c) => (
+                          <span
+                            key={c.id}
+                            title={c.value}
+                            className="h-[10px] w-[10px] rounded-full ring-1 ring-black/10"
+                            style={{ backgroundColor: c.swatche_value || "#cccccc" }}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -308,7 +308,7 @@ export default function AllProducts({
                 <button
                   type="button"
                   aria-label="Add to cart"
-                  onClick={(e) => quickAddToCart(e, p)}
+                  onClick={(e) => openQuickAdd(e, p)}
                   className="relative z-10 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
                 >
                   <IoCart className="h-4 w-4 text-white" />
@@ -335,7 +335,7 @@ export default function AllProducts({
         <div className="mt-10 hidden md:flex items-center gap-4">
           <div className="flex flex-1 items-center">
             <span
-              className="h-[2px] rounded-full bg-ink-soft transition-[width] duration-300 ease-out"
+              className="h-[2px] rounded-full bg-[#525151] transition-[width] duration-300 ease-out"
               style={{ width: `${progressPct}%` }}
             />
             <span className="h-px flex-1 bg-[#cfcfcf]" />
@@ -378,6 +378,13 @@ export default function AllProducts({
           </div>
         </>
       )}
+
+      <QuickAddModal
+        productId={quickAddId}
+        open={quickAddId !== null}
+        onClose={() => setQuickAddId(null)}
+        onAdded={(msg) => flashToast(msg)}
+      />
     </section>
   );
 }

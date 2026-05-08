@@ -11,6 +11,12 @@ async function get<T>(path: string, params?: Record<string, string | number>): P
   return json.data as T;
 }
 
+export type ProductColorSwatch = {
+  id: number;
+  value: string;
+  swatche_value?: string | null;
+};
+
 export type Product = {
   id: number;
   name: string;
@@ -26,12 +32,35 @@ export type Product = {
   special_price?: number;
   tax_percentage?: number;
   is_prices_inclusive_tax?: number;
+  colors?: ProductColorSwatch[];
+};
+
+export type AttributeValue = {
+  id: number;
+  value: string;
+  swatche_type?: string | null;
+  swatche_value?: string | null;
+};
+
+export type AttributeOption = {
+  id: number;
+  name: string;
+  values: AttributeValue[];
+};
+
+export type ProductVariant = {
+  id: number;
+  attribute_value_ids: number[];
+  price: number;
+  special_price: number;
+  stock: number | null;
 };
 
 export type ProductDetail = Product & {
   description?: string;
   short_description?: string;
   other_images?: string;
+  size_chart?: string;
   category_slug?: string;
   category_id?: number;
   is_returnable?: number;
@@ -41,6 +70,8 @@ export type ProductDetail = Product & {
   quantity_step_size?: number | null;
   tax_percentage?: number;
   is_prices_inclusive_tax?: number;
+  attribute_options?: AttributeOption[];
+  variants?: ProductVariant[];
 };
 
 export type Category = {
@@ -157,6 +188,7 @@ export type SiteSettings = {
   site_title?: string;
   support_number?: string;
   support_email?: string;
+  delivery_terms?: string;
   copyright_details?: string;
   address?: string;
   app_short_description?: string;

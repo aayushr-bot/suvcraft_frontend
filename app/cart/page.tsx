@@ -7,7 +7,7 @@ import { Trash2, ChevronRight } from "../components/icons";
 import AuthModal from "../components/AuthModal";
 import ProductImage from "../components/ProductImage";
 import BuyTogether from "../components/BuyTogether";
-import { useCart } from "@/lib/cartContext";
+import { useCart, lineKey } from "@/lib/cartContext";
 import { imgUrl } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -103,6 +103,7 @@ export default function CartPage() {
   useEffect(() => {
     let cancelled = false;
     items.forEach((item) => {
+      const k = lineKey(item);
       fetch(`${API}/api/v1/products/${item.id}`, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
@@ -113,7 +114,7 @@ export default function CartPage() {
           const stockCap = p.stock != null ? Number(p.stock) : Infinity;
           const allowedCap = p.total_allowed_quantity != null ? Number(p.total_allowed_quantity) : Infinity;
           const maxQ = Math.min(stockCap, allowedCap);
-          updateLimits(item.id, {
+          updateLimits(k, {
             minQty: minQ,
             maxQty: Number.isFinite(maxQ) ? maxQ : undefined,
             step: stepQ,
@@ -123,19 +124,19 @@ export default function CartPage() {
           });
           if (Number.isFinite(maxQ) && item.qty > maxQ) {
             if (maxQ < minQ) {
-              removeFromCart(item.id);
+              removeFromCart(k);
             } else {
-              updateQty(item.id, maxQ);
+              updateQty(k, maxQ);
               setQtyErrors((e) => ({
                 ...e,
-                [item.id]:
+                [k]:
                   allowedCap < stockCap
                     ? `Adjusted to max ${allowedCap} per order.`
                     : `Adjusted to ${stockCap} available in stock.`,
               }));
             }
           } else if (item.qty < minQ) {
-            updateQty(item.id, minQ);
+            updateQty(k, minQ);
           }
         })
         .catch(() => {});
@@ -147,6 +148,7 @@ export default function CartPage() {
   }, []);
 
   function changeQty(item: typeof items[number], delta: number) {
+    const k = lineKey(item);
     const minQ = item.minQty ?? 1;
     const maxQ = item.maxQty ?? Infinity;
     const step = item.step ?? 1;
@@ -156,10 +158,10 @@ export default function CartPage() {
     // pulls the item out of the cart.
     if (delta < 0 && next < minQ) {
       setQtyErrors((e) => {
-        const { [item.id]: _, ...rest } = e;
+        const { [k]: _, ...rest } = e;
         return rest;
       });
-      removeFromCart(item.id);
+      removeFromCart(k);
       return;
     }
     if (delta > 0 && next > maxQ) {
@@ -167,14 +169,14 @@ export default function CartPage() {
       const msg = stockCap === maxQ
         ? `Only ${maxQ} item${maxQ === 1 ? "" : "s"} available.`
         : `Maximum ${maxQ} unit${maxQ === 1 ? "" : "s"} per order.`;
-      setQtyErrors((e) => ({ ...e, [item.id]: msg }));
+      setQtyErrors((e) => ({ ...e, [k]: msg }));
       return;
     }
     setQtyErrors((e) => {
-      const { [item.id]: _, ...rest } = e;
+      const { [k]: _, ...rest } = e;
       return rest;
     });
-    updateQty(item.id, next);
+    updateQty(k, next);
   }
 
   function handleCheckout() {
@@ -296,7 +298,7 @@ export default function CartPage() {
 
             <div className="flex flex-col gap-8">
               {items.map((item, index) => (
-                <div key={item.id} className="relative bg-white">
+                <div key={lineKey(item)} className="relative bg-white">
                   {/* Coupon strip — only when an order coupon is active.
                       The verified badge has moved into the right column so the
                       whole right-side group (verified + rating + trash) sits
@@ -334,17 +336,22 @@ export default function CartPage() {
                         {item.name}
                       </Link>
 
-                      {/* Size + Color attribute chips. Static placeholders until cart items
-                          carry the buyer's selection from the product detail page. */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#f5f5f5] px-2.5 py-1 sm:px-3 sm:py-1.5 text-[12px] sm:text-[12.5px] font-medium text-ink">
-                          <span className="text-[#878787]">Size :</span> XS
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#f5f5f5] px-2.5 py-1 sm:px-3 sm:py-1.5 text-[12px] sm:text-[12.5px] font-medium text-ink">
-                          <span className="text-[#878787]">Color :</span>
-                          <span className="inline-block h-3.5 w-3.5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: "#f7c2d2" }} />
-                        </span>
-                      </div>
+                      {(item.size || item.color) && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {item.size && (
+                            <span className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#f5f5f5] px-2.5 py-1 sm:px-3 sm:py-1.5 text-[12px] sm:text-[12.5px] font-medium text-ink">
+                              <span className="text-[#878787]">Size :</span> {item.size}
+                            </span>
+                          )}
+                          {item.color && (
+                            <span className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#f5f5f5] px-2.5 py-1 sm:px-3 sm:py-1.5 text-[12px] sm:text-[12.5px] font-medium text-ink">
+                              <span className="text-[#878787]">Color :</span>
+                              <span className="inline-block h-3.5 w-3.5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: item.color.swatch || "#e7e7e7" }} />
+                              <span>{item.color.name}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       <div className="flex h-[40px] w-[108px] items-center justify-between rounded-[8px] border border-[#cfcfcf] px-3">
                         <button
@@ -363,9 +370,9 @@ export default function CartPage() {
                           +
                         </button>
                       </div>
-                      {qtyErrors[item.id] && (
+                      {qtyErrors[lineKey(item)] && (
                         <p className="text-[12px] text-red-500" role="alert">
-                          {qtyErrors[item.id]}
+                          {qtyErrors[lineKey(item)]}
                         </p>
                       )}
 
@@ -375,7 +382,7 @@ export default function CartPage() {
 
                       <button
                         type="button"
-                        onClick={() => moveToSaved(item.id)}
+                        onClick={() => moveToSaved(lineKey(item))}
                         className="self-start text-[12px] font-semibold text-[#525151] hover:text-brand-purple hover:underline transition-colors"
                       >
                         Save for later
@@ -398,7 +405,7 @@ export default function CartPage() {
                           4.9
                         </span>
                         <button
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={() => removeFromCart(lineKey(item))}
                           aria-label="Remove from cart"
                           className="bg-[#f5f5f5] p-1.5 sm:p-2 rounded-[8px] text-[#9c9c9c] hover:bg-red-50 hover:text-red-500 transition-all"
                         >
@@ -437,7 +444,7 @@ export default function CartPage() {
 
             <div className="flex flex-col gap-8">
               {saved.map((item, index) => (
-                <div key={item.id} className="relative bg-white">
+                <div key={lineKey(item)} className="relative bg-white">
                   <div className="flex gap-3 sm:gap-6">
                     <Link href={`/product/${item.id}`} className="h-[90px] w-[90px] sm:h-[110px] sm:w-[110px] shrink-0 flex items-center justify-center rounded-[12px] border border-[#e7e7e7] bg-[#f9f9f9] overflow-hidden">
                       <ProductImage src={resolveImg(item.image)} alt={item.name} className="h-full w-full object-contain p-2" />
@@ -454,14 +461,14 @@ export default function CartPage() {
                       <div className="flex flex-wrap gap-2 sm:gap-3 mt-1">
                         <button
                           type="button"
-                          onClick={() => moveToCart(item.id)}
+                          onClick={() => moveToCart(lineKey(item))}
                           className="h-[34px] sm:h-[36px] rounded-[8px] bg-ink px-3 sm:px-4 text-[11.5px] sm:text-[12px] font-bold text-white hover:bg-black transition-colors"
                         >
                           Move to cart
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeFromSaved(item.id)}
+                          onClick={() => removeFromSaved(lineKey(item))}
                           className="h-[34px] sm:h-[36px] rounded-[8px] border border-[#cfcfcf] px-3 sm:px-4 text-[11.5px] sm:text-[12px] font-semibold text-[#525151] hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"
                         >
                           Remove

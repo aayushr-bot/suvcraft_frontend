@@ -32,13 +32,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   }
 
   const catId = (product as any).cat_id ?? (product as any).category_id;
-  const [related, ratingsData, popularData] = await Promise.all([
+  const [related, ratingsData, popularData, settings] = await Promise.all([
     api.products({
       per_page: 8,
       ...(catId ? { category_id: catId } : {}),
     }).catch(() => ({ rows: [] as any[] })),
     api.productRatings(product!.id, 10).catch(() => ({ rows: [], summary: { total: 0, avg_rating: 0, r5: 0, r4: 0, r3: 0, r2: 0, r1: 0 } })),
     api.popularProducts({ limit: 8, exclude: product!.id }).catch(() => ({ rows: [] as any[] })),
+    api.settings().catch(() => ({})),
   ]);
 
   const relatedFiltered = ((related as any).rows ?? []).filter((p: any) => p.id !== product!.id).slice(0, 4);
@@ -51,6 +52,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       ratings={(ratingsData as any).rows ?? []}
       ratingSummary={(ratingsData as any).summary}
       popular={popular}
+      settings={settings as any}
     />
   );
 }

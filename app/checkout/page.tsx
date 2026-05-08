@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useCart } from "@/lib/cartContext";
+import { useCart, lineKey } from "@/lib/cartContext";
 import { imgUrl, type Address } from "@/lib/api";
 import { Star } from "../components/icons";
 import ProductImage from "../components/ProductImage";
@@ -390,18 +390,34 @@ export default function CheckoutPage() {
             <h3 className="text-[14px] font-bold text-ink mb-[-12px]">Review your Cart</h3>
 
             {/* Cart items list */}
-            <div className="rounded-[5px] border-2 border-dashed border-[#e7e7e7] bg-white px-5 py-4 max-h-[360px] overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}>
+            <div className="rounded-[5px] border-2 border-dashed border-[#e7e7e7] bg-white px-5 py-4 max-h-[300px] overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}>
               {items.map((item, idx) => {
                 const info = productInfo[item.id];
                 const unit = info?.mrp ?? item.price;
                 return (
-                  <div key={item.id} className={`flex items-center gap-3 ${idx > 0 ? "mt-4 pt-4 border-t border-dashed border-[#e7e7e7]" : ""}`}>
+                  <div key={lineKey(item)} className={`flex items-center gap-3 ${idx > 0 ? "mt-4 pt-4 border-t border-dashed border-[#e7e7e7]" : ""}`}>
                     <div className="h-[60px] w-[60px] shrink-0 rounded-[6px] bg-[#f9f9f9] overflow-hidden flex items-center justify-center">
                       <ProductImage src={resolveImg(item.image)} alt={item.name} className="h-full w-full object-contain p-1" />
                     </div>
                     <div className="flex flex-1 min-w-0 flex-col gap-0.5">
                       <h4 className="text-[13px] font-medium text-ink line-clamp-1 leading-tight">{item.name}</h4>
                       <span className="text-[12px] text-[#878787]">{item.qty}x</span>
+                      {(item.size || item.color) && (
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          {item.size && (
+                            <span className="inline-flex items-center gap-1 rounded-[6px] bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-medium text-ink">
+                              <span className="text-[#878787]">Size :</span> {item.size}
+                            </span>
+                          )}
+                          {item.color && (
+                            <span className="inline-flex items-center gap-1 rounded-[6px] bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-medium text-ink">
+                              <span className="text-[#878787]">Color :</span>
+                              <span className="inline-block h-3 w-3 rounded-full ring-1 ring-black/10" style={{ backgroundColor: item.color.swatch || "#e7e7e7" }} />
+                              <span>{item.color.name}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="text-[12px] text-[#525151]">
                         Unit Price : <span className="font-semibold text-ink">{unit.toLocaleString("en-IN")}</span>
                       </div>

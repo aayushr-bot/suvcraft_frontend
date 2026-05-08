@@ -14,6 +14,9 @@ export type CartItem = {
   stock?: number;
   tax_percentage?: number;
   is_prices_inclusive_tax?: number;
+  size?: string;
+  color?: { name: string; swatch?: string };
+  variant_id?: number;
 };
 
 type State = { items: CartItem[]; saved: CartItem[] };
@@ -28,66 +31,74 @@ type Action =
   | { type: "REMOVE_SAVED"; id: number }
   | { type: "CLEAR" };
 
-// Collapse rows that share the same product id, keeping the highest qty.
-// The server's /api/v1/cart can occasionally return two rows for one product
-// (e.g. an active row + an orphaned saved-for-later row), and React then
-// warns about duplicate keys. Dedupe defensively at the reducer.
-function dedupeById(items: CartItem[]): CartItem[] {
-  const byId = new Map<number, CartItem>();
+// Lines are keyed by variant_id when present so different color/size combos of
+// the same product remain distinct rows. Falls back to product id for legacy
+// items that never picked a variant.
+export function lineKey(it: { id: number; variant_id?: number }): number {
+  return it.variant_id ?? it.id;
+}
+
+// Collapse rows that share the same line key, keeping the highest qty. The
+// server can occasionally return two rows for one line (e.g. an active row +
+// an orphaned saved-for-later row), and React then warns about duplicate keys.
+function dedupeByLine(items: CartItem[]): CartItem[] {
+  const map = new Map<number, CartItem>();
   for (const it of items) {
-    const cur = byId.get(it.id);
-    byId.set(it.id, cur ? { ...cur, qty: Math.max(cur.qty, it.qty) } : it);
+    const k = lineKey(it);
+    const cur = map.get(k);
+    map.set(k, cur ? { ...cur, qty: Math.max(cur.qty, it.qty) } : it);
   }
-  return [...byId.values()];
+  return [...map.values()];
 }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "INIT":
-      return { items: dedupeById(action.items), saved: dedupeById(action.saved) };
+      return { items: dedupeByLine(action.items), saved: dedupeByLine(action.saved) };
     case "ADD": {
-      const existing = state.items.find((i) => i.id === action.item.id);
+      const k = lineKey(action.item);
+      const existing = state.items.find((i) => lineKey(i) === k);
       if (existing) {
         return {
           ...state,
           items: state.items.map((i) =>
-            i.id === action.item.id ? { ...i, ...action.item, qty: i.qty + action.qty } : i
+            lineKey(i) === k ? { ...i, ...action.item, qty: i.qty + action.qty } : i
           ),
         };
       }
       return { ...state, items: [...state.items, { ...action.item, qty: action.qty }] };
     }
     case "REMOVE":
-      return { ...state, items: state.items.filter((i) => i.id !== action.id) };
+      return { ...state, items: state.items.filter((i) => lineKey(i) !== action.id) };
     case "SET_QTY":
-      if (action.qty < 1) return { ...state, items: state.items.filter((i) => i.id !== action.id) };
+      if (action.qty < 1) return { ...state, items: state.items.filter((i) => lineKey(i) !== action.id) };
       return {
         ...state,
-        items: state.items.map((i) => (i.id === action.id ? { ...i, qty: action.qty } : i)),
+        items: state.items.map((i) => (lineKey(i) === action.id ? { ...i, qty: action.qty } : i)),
       };
     case "UPDATE_LIMITS":
       return {
         ...state,
-        items: state.items.map((i) => (i.id === action.id ? { ...i, ...action.limits } : i)),
+        items: state.items.map((i) => (lineKey(i) === action.id ? { ...i, ...action.limits } : i)),
       };
     case "MOVE_TO_SAVED": {
-      const item = state.items.find((i) => i.id === action.id);
+      const item = state.items.find((i) => lineKey(i) === action.id);
       if (!item) return state;
       return {
-        items: state.items.filter((i) => i.id !== action.id),
-        saved: state.saved.find((s) => s.id === action.id) ? state.saved : [...state.saved, item],
+        items: state.items.filter((i) => lineKey(i) !== action.id),
+        saved: state.saved.find((s) => lineKey(s) === action.id) ? state.saved : [...state.saved, item],
       };
     }
     case "MOVE_TO_CART": {
-      const item = state.saved.find((s) => s.id === action.id);
+      const item = state.saved.find((s) => lineKey(s) === action.id);
       if (!item) return state;
       return {
-        items: state.items.find((i) => i.id === action.id) ? state.items : [...state.items, item],
-        saved: state.saved.filter((s) => s.id !== action.id),
+        items: state.items.find((i) => lineKey(i) === action.id) ? state.items : [...state.items, item],
+        saved: state.saved.filter((s) => lineKey(s) !== action.id),
       };
     }
     case "REMOVE_SAVED":
-      return { ...state, saved: state.saved.filter((s) => s.id !== action.id) };
+      return { ...state, saved: state.saved.filter((s) => lineKey(s) !== action.id) };
     case "CLEAR":
       return { items: [], saved: state.saved };
     default:
@@ -165,13 +176,16 @@ function clearLocal() {
 }
 
 function mergeItems(local: CartItem[], remote: CartItem[]): CartItem[] {
-  const byId = new Map<number, CartItem>();
-  for (const it of remote) byId.set(it.id, it);
+  const byKey = new Map<number, CartItem>();
+  for (const it of remote) byKey.set(lineKey(it), it);
   for (const it of local) {
-    const cur = byId.get(it.id);
-    byId.set(it.id, cur ? { ...cur, qty: Math.max(cur.qty, it.qty) } : it);
+    const k = lineKey(it);
+    const cur = byKey.get(k);
+    // Preserve server-side metadata (variant_id, size, color) when present;
+    // local just contributes max qty for that line.
+    byKey.set(k, cur ? { ...cur, qty: Math.max(cur.qty, it.qty) } : it);
   }
-  return [...byId.values()];
+  return [...byKey.values()];
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -222,7 +236,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ items: merged.map((i) => ({ id: i.id, qty: i.qty })) }),
+            body: JSON.stringify({ items: merged.map((i) => ({ id: i.id, qty: i.qty, variant_id: i.variant_id })) }),
           });
           if (putRes.ok) {
             const j = await putRes.json();
@@ -254,7 +268,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (skipNextSync.current) { skipNextSync.current = false; return; }
 
     if (isLoggedIn) {
-      const payload = state.items.map((i) => ({ id: i.id, qty: i.qty }));
+      const payload = state.items.map((i) => ({ id: i.id, qty: i.qty, variant_id: i.variant_id }));
       fetch(`${API}/api/v1/cart`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

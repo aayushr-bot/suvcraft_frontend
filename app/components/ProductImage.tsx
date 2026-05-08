@@ -16,6 +16,11 @@ export default function ProductImage({
   const [img, setImg] = useState(src || PLACEHOLDER_IMG);
   const ref = useRef<HTMLImageElement>(null);
 
+  // Sync internal state when the parent swaps the src (e.g. carousel navigation).
+  useEffect(() => {
+    setImg(src || PLACEHOLDER_IMG);
+  }, [src]);
+
   // Catch images that failed to load BEFORE hydration (so onError never fires)
   useEffect(() => {
     const el = ref.current;

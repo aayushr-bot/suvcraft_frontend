@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { imgUrl } from "@/lib/api";
 import { useWishlist } from "@/lib/wishlistContext";
-import { useCart } from "@/lib/cartContext";
 import ProductImage from "./ProductImage";
+import QuickAddModal from "./QuickAddModal";
 import { HeartFill, Trash2 } from "./icons";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -24,7 +24,7 @@ function resolveImg(path: string) {
 
 export default function WishlistDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { items, remove } = useWishlist();
-  const { addToCart } = useCart();
+  const [quickAddId, setQuickAddId] = useState<number | null>(null);
 
   // Lock body scroll while drawer is open and close on Escape.
   useEffect(() => {
@@ -39,17 +39,8 @@ export default function WishlistDrawer({ open, onClose }: { open: boolean; onClo
     };
   }, [open, onClose]);
 
-  function moveToCart(item: typeof items[number]) {
-    addToCart(
-      {
-        id: item.id,
-        name: item.name,
-        image: item.image,
-        price: item.price,
-      },
-      1,
-    );
-    remove(item.id);
+  function openQuickAdd(item: typeof items[number]) {
+    setQuickAddId(item.id);
   }
 
   return (
@@ -130,7 +121,7 @@ export default function WishlistDrawer({ open, onClose }: { open: boolean; onClo
                     <div className="mt-auto flex items-center gap-2 pt-2">
                       <button
                         type="button"
-                        onClick={() => moveToCart(item)}
+                        onClick={() => openQuickAdd(item)}
                         className="flex-1 inline-flex h-[34px] items-center justify-center rounded-[8px] bg-ink-soft px-3 text-[12px] font-bold text-white hover:bg-black"
                       >
                         Move to Cart
@@ -151,6 +142,15 @@ export default function WishlistDrawer({ open, onClose }: { open: boolean; onClo
           </div>
         )}
       </aside>
+
+      <QuickAddModal
+        productId={quickAddId}
+        open={quickAddId !== null}
+        onClose={() => setQuickAddId(null)}
+        onAdded={() => {
+          if (quickAddId !== null) remove(quickAddId);
+        }}
+      />
     </>
   );
 }

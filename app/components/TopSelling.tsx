@@ -1,5 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { Star } from "./icons";
+import { ChevronRight, Star } from "./icons";
 import { type Product, type SiteSettings, imgUrl } from "@/lib/api";
 
 const HEIGHTS = [240, 290, 200, 160];
@@ -16,9 +19,18 @@ export default function TopSelling({ products, settings = {} }: { products: Prod
   const moreText = settings.topselling_more_text ?? "See More Products";
   const moreLink = settings.topselling_more_link ?? "/#all-products";
 
+  const [page, setPage] = useState(0);
+  const PER_PAGE = 4;
+
   if (products.length === 0) return null;
 
-  const cards = products.slice(0, 4).map((p, i) => {
+  const totalPages = Math.max(1, Math.ceil(products.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages - 1);
+  const visible = products.slice(safePage * PER_PAGE, safePage * PER_PAGE + PER_PAGE);
+  const hasPrev = safePage > 0;
+  const hasNext = safePage < totalPages - 1;
+
+  const cards = visible.map((p, i) => {
     const sp = Number((p as Product).special_price ?? 0);
     const rg = Number((p as Product).price ?? 0);
     const pr = sp && rg && sp < rg ? sp : rg;
@@ -32,7 +44,7 @@ export default function TopSelling({ products, settings = {} }: { products: Prod
       name: p.name,
       price: pr ? `₹${pr.toLocaleString("en-IN")}` : "—",
       rating: `(${Number(p.rating ?? 0).toFixed(1)})`,
-      height: HEIGHTS[i],
+      height: HEIGHTS[i % HEIGHTS.length],
       id: p.id,
     };
   });
@@ -64,7 +76,31 @@ export default function TopSelling({ products, settings = {} }: { products: Prod
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-2 items-end gap-4 md:grid-cols-4">
+      {totalPages > 1 && (
+        <div className="mt-6 hidden md:flex items-center justify-end gap-2">
+          <button
+            type="button"
+            aria-label="Previous"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={!hasPrev}
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#e7e7e7] bg-white text-ink hover:bg-[#f6f6f6] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4 rotate-180" />
+          </button>
+          <button
+            type="button"
+            aria-label="Next"
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={!hasNext}
+            className="flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[#e7e7e7] bg-white text-ink hover:bg-[#f6f6f6] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="mt-4 md:mt-2">
+        <div className="grid grid-cols-2 items-end gap-4 md:grid-cols-4">
         {cards.map((p) => (
           <Link key={p.id} href={`/product/${p.id}`} className="flex flex-col group">
             <div
@@ -92,6 +128,7 @@ export default function TopSelling({ products, settings = {} }: { products: Prod
             </div>
           </Link>
         ))}
+        </div>
       </div>
     </section>
   );

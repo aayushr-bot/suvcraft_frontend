@@ -121,7 +121,7 @@ export default function PaymentPage() {
           zip: address.pincode || address.zip,
           address_id: address.id ? Number(address.id) : undefined,
           payment_method: method,
-          items: items.map((i) => ({ id: i.id, name: i.name, image: i.image, price: i.price, qty: i.qty })),
+          items: items.map((i) => ({ id: i.id, name: i.name, image: i.image, price: i.price, qty: i.qty, variant_id: i.variant_id })),
           promo_code: coupon?.code || undefined,
         }),
       });

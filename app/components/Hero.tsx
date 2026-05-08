@@ -99,7 +99,7 @@ export default function Hero({ sliders = [] }: { sliders?: Slider[] }) {
           {/* Progress bar */}
           <div className="flex flex-1 items-center">
             <span
-              className="h-[2px] rounded-full bg-ink-soft transition-all duration-300 ease-out"
+              className="h-[2px] rounded-full bg-[#525151] transition-all duration-300 ease-out"
               style={{ width: `${((index + 1) / sliders.length) * 100}%` }}
             />
             <span className="h-px flex-1 bg-[#cfcfcf]" />

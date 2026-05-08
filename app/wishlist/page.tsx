@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useWishlist } from "@/lib/wishlistContext";
-import { useCart } from "@/lib/cartContext";
 import { imgUrl } from "@/lib/api";
 import ProductImage from "../components/ProductImage";
+import QuickAddModal from "../components/QuickAddModal";
 import { Trash2, HeartFill } from "../components/icons";
 
 export const dynamic = "force-dynamic";
@@ -25,20 +26,7 @@ function resolveImg(path: string) {
 
 export default function WishlistPage() {
   const { items, remove } = useWishlist();
-  const { addToCart } = useCart();
-
-  function moveToCart(item: typeof items[number]) {
-    addToCart(
-      {
-        id: item.id,
-        name: item.name,
-        image: item.image,
-        price: item.price,
-      },
-      1,
-    );
-    remove(item.id);
-  }
+  const [quickAddId, setQuickAddId] = useState<number | null>(null);
 
   if (items.length === 0) {
     return (
@@ -94,7 +82,7 @@ export default function WishlistPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => moveToCart(item)}
+                  onClick={() => setQuickAddId(item.id)}
                   className="mt-1 h-[36px] rounded-[8px] bg-ink text-[12px] font-bold text-white hover:bg-black transition-colors"
                 >
                   Move to cart
@@ -104,6 +92,15 @@ export default function WishlistPage() {
           ))}
         </div>
       </div>
+
+      <QuickAddModal
+        productId={quickAddId}
+        open={quickAddId !== null}
+        onClose={() => setQuickAddId(null)}
+        onAdded={() => {
+          if (quickAddId !== null) remove(quickAddId);
+        }}
+      />
     </div>
   );
 }

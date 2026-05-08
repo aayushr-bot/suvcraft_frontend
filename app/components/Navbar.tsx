@@ -477,19 +477,86 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               <SearchIcon className="h-4 w-4 text-ink-soft" />
             </button>
           </label>
-          <button
-            type="button"
-            aria-label="Settings"
-            onClick={() => setIsSettingsOpen((v) => !v)}
-            className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5"
-          >
-            <SettingsIcon className="h-5 w-5" />
-            {wishlistCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
-                {wishlistCount > 99 ? "99+" : wishlistCount}
-              </span>
+          <div className="relative ml-2">
+            <button
+              type="button"
+              aria-label="Settings"
+              aria-expanded={isSettingsOpen}
+              onClick={() => setIsSettingsOpen((v) => !v)}
+              className="relative flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5"
+            >
+              <SettingsIcon className="h-5 w-5" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                  {wishlistCount > 99 ? "99+" : wishlistCount}
+                </span>
+              )}
+            </button>
+            {isSettingsOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-[220px] rounded-[10px] border border-[#e7e7e7] bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setIsSettingsOpen(false);
+                    if (!user) { e.preventDefault(); setIsSignInOpen(true); return; }
+                    setIsWishlistOpen(true);
+                  }}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <HeartLine className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1 text-left">Wishlist</span>
+                  {wishlistCount > 0 && (
+                    <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                      {wishlistCount > 99 ? "99+" : wishlistCount}
+                    </span>
+                  )}
+                </button>
+                <Link href="/orders" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]">
+                  <OrderIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">My Orders</span>
+                </Link>
+                <Link href="/profile" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]">
+                  <UserIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Edit Profile</span>
+                </Link>
+                <Link href="/addresses" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]">
+                  <MapPinIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Saved Address</span>
+                </Link>
+                <Link href="/saved-cards" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]">
+                  <CreditCardIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Saved Cards</span>
+                </Link>
+                <Link href="/notifications" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]">
+                  <BellIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1">Notifications</span>
+                </Link>
+                <div className="my-1 border-t border-[#eee]" />
+                <button
+                  type="button"
+                  onClick={() => { setIsSettingsOpen(false); setIsContactOpen(true); }}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                >
+                  <HeadsetIcon className="h-4 w-4 text-ink-soft" />
+                  <span className="flex-1 text-left">Help</span>
+                </button>
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => { setIsSettingsOpen(false); handleLogout(); }}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
+                  >
+                    <LogOutIcon className="h-4 w-4 text-ink-soft" />
+                    <span className="flex-1 text-left">Sign Out</span>
+                  </button>
+                )}
+                <Link href="/delete-account" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50">
+                  <Trash2 className="h-4 w-4" />
+                  <span className="flex-1">Delete Account</span>
+                </Link>
+              </div>
             )}
-          </button>
+          </div>
           <Link href="/cart" aria-label="Cart" className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5">
             <CartIcon className="h-5 w-5" strokeWidth={1.5} />
             {cartCount > 0 && (
