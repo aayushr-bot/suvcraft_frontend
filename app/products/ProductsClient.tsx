@@ -294,10 +294,14 @@ export default function ProductsClient({
       {/* Top heading row */}
       <div className="flex items-start justify-between gap-4 md:items-end md:justify-between mb-6 md:mb-8">
         <div className="flex-1 min-w-0">
-          <h1 className="text-[22px] md:text-[40px] font-bold text-ink leading-tight">Our All Products</h1>
-          <p className="mt-1.5 md:mt-2 text-[12px] md:text-[14px] text-[#8c8c8c] max-w-[400px]">
-            What is Lorem Ipsum? Lorem Ipsum is simply dummy text of the
-          </p>
+          <h1 className="text-[22px] md:text-[40px] font-bold text-ink leading-tight">
+            {(settings.products_title || "").trim() || "Our All Products"}
+          </h1>
+          {((settings.products_description || "").trim() || "What is Lorem Ipsum? Lorem Ipsum is simply dummy text of the") && (
+            <p className="mt-1.5 md:mt-2 text-[12px] md:text-[14px] text-[#8c8c8c] max-w-[400px]">
+              {(settings.products_description || "").trim() || "What is Lorem Ipsum? Lorem Ipsum is simply dummy text of the"}
+            </p>
+          )}
         </div>
         {/* Mobile-only filter trigger */}
         <button

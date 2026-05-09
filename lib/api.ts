@@ -166,6 +166,8 @@ export type SiteSettings = {
   products_avatar_3?: string;
   products_customer_count?: string;
   products_customer_label?: string;
+  products_title?: string;
+  products_description?: string;
   logo?: string;
   app_name?: string;
   // Top-Selling section

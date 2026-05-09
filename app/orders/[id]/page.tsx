@@ -420,7 +420,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 type="button"
                 onClick={cancelOrder}
                 disabled={cancelling}
-                className="inline-flex h-[40px] items-center justify-center rounded-[10px] border border-red-500 px-5 text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex h-[52px] min-w-[220px] items-center justify-center rounded-[12px] border-2 border-red-500 px-8 text-[15px] font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {cancelling ? "Cancelling…" : "Cancel Order"}
               </button>
