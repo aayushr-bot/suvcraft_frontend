@@ -54,7 +54,7 @@ export default function Hero({ sliders = [] }: { sliders?: Slider[] }) {
         }}
       >
         {/* Text column — bounded so it never overlaps the image */}
-        <div className="relative z-10 flex w-full md:max-w-[60%] flex-col gap-5 md:gap-8 px-6 py-8 sm:px-10 sm:py-10 md:px-32 md:py-20">
+        <div className="relative z-10 flex max-w-[60%] flex-col gap-5 md:gap-8 px-6 py-8 sm:px-10 sm:py-10 md:px-32 md:py-20">
           {current.title && (
             <h1 className="font-sans text-[32px] sm:text-[44px] md:text-[80px] font-bold leading-[1.1] tracking-normal text-[#9B660C]">
               {current.title}
@@ -82,13 +82,13 @@ export default function Hero({ sliders = [] }: { sliders?: Slider[] }) {
           )}
         </div>
 
-        {/* Image — full-bleed on the right edge on desktop, hidden on mobile so the text gets the full width */}
+        {/* Image — anchored to the right edge of the banner on every breakpoint */}
         {productImg && (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={productImg}
             alt={current.title || "Hero"}
-            className="absolute right-4 lg:right-16 bottom-0 h-full w-auto max-w-[45%] lg:max-w-[50%] object-contain object-bottom pointer-events-none hidden md:block"
+            className="absolute right-2 sm:right-4 lg:right-16 bottom-0 h-full w-auto max-w-[38%] sm:max-w-[40%] md:max-w-[45%] lg:max-w-[50%] object-contain object-bottom pointer-events-none"
           />
         )}
       </div>

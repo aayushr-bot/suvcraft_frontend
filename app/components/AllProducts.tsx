@@ -331,6 +331,18 @@ export default function AllProducts({
         ))}
       </div>}
 
+      {/* Mobile-only "View All Products" CTA — sits below the grid; desktop has its own in the scroll-progress row */}
+      {products.length > 0 && (
+        <div className="mt-6 flex justify-center md:hidden">
+          <Link
+            href="/products"
+            className="inline-flex h-[44px] items-center justify-center rounded-full border border-[#cfcfcf] px-8 text-[13px] font-medium text-ink hover:bg-black/5"
+          >
+            View All Products
+          </Link>
+        </div>
+      )}
+
       {canScroll && (
         <div className="mt-10 hidden md:flex items-center gap-4">
           <div className="flex flex-1 items-center">

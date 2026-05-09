@@ -109,6 +109,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   const { count: cartCount } = useCart();
   const { count: wishlistCount } = useWishlist();
   const settingsRef = useRef<HTMLDivElement | null>(null);
+  const mobileSettingsRef = useRef<HTMLDivElement | null>(null);
   const [hoveredCatId, setHoveredCatId] = useState<number | null>(null);
   const [tabsByCat, setTabsByCat] = useState<Record<number, CategoryTab[]>>({});
   const catCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,10 +149,17 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   }
 
   // Close the settings dropdown when clicking anywhere outside it.
+  // Both the desktop and mobile dropdowns share `isSettingsOpen`, so we have to
+  // check the click against both containers — otherwise tapping a Link in the
+  // mobile dropdown looks "outside" the desktop ref and the dropdown closes on
+  // mousedown before the click navigates anywhere.
   useEffect(() => {
     if (!isSettingsOpen) return;
     function onClick(e: MouseEvent) {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inDesktop = settingsRef.current?.contains(target);
+      const inMobile = mobileSettingsRef.current?.contains(target);
+      if (!inDesktop && !inMobile) {
         setIsSettingsOpen(false);
       }
     }
@@ -484,7 +492,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               <SearchIcon className="h-4 w-4 text-ink-soft" />
             </button>
           </label>
-          <div className="relative ml-2">
+          <div className="relative ml-2" ref={mobileSettingsRef}>
             <button
               type="button"
               aria-label="Settings"
