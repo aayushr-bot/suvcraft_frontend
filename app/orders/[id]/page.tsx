@@ -134,6 +134,91 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
 
+  function downloadInvoice() {
+    if (!order) return;
+    const fmtAmt = (n: number | string | undefined) => `Rs. ${Number(n ?? 0).toLocaleString("en-IN")}`;
+    const placedOn = formatDate(order.date_added);
+    const subTotal = order.items.reduce((s, i) => s + Number(i.sub_total ?? 0), 0);
+    const taxAmt = order.items.reduce((s, i) => s + Number((i as { tax_amount?: number | string }).tax_amount ?? 0), 0);
+    const addr = order.address || parseAddressFromNotes(order.notes || "") || {};
+    const a = addr as { name?: string; mobile?: string; email?: string; address?: string; landmark?: string; city?: string; state?: string; pincode?: string; zip?: string };
+    const escapeHtml = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));
+    const itemsRows = order.items.map((it) => `
+      <tr>
+        <td>${escapeHtml(it.product_name)}${it.size || it.color ? `<div class="muted">${[it.color?.name, it.size].filter(Boolean).map(escapeHtml).join(" / ")}</div>` : ""}</td>
+        <td class="num">${escapeHtml(it.quantity)}</td>
+        <td class="num">${fmtAmt(it.price)}</td>
+        <td class="num">${fmtAmt(it.sub_total)}</td>
+      </tr>
+    `).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Invoice #${order.id}</title><style>
+      *{box-sizing:border-box}
+      body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1c1c1c;margin:0;padding:32px;max-width:800px;margin:0 auto}
+      h1{font-size:22px;margin:0 0 4px}
+      .muted{color:#878787;font-size:12px}
+      .row{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+      .box{margin-top:24px}
+      table{width:100%;border-collapse:collapse;margin-top:24px}
+      th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #eee;font-size:13px;vertical-align:top}
+      th{background:#fafafa;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#525151}
+      .num{text-align:right;white-space:nowrap}
+      .totals{margin-top:16px;margin-left:auto;width:280px}
+      .totals .line{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:#525151}
+      .totals .grand{border-top:2px solid #1c1c1c;margin-top:8px;padding-top:10px;font-weight:700;font-size:16px;color:#1c1c1c}
+      h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#525151;margin:0 0 6px}
+      .foot{margin-top:32px;padding-top:16px;border-top:1px solid #eee;text-align:center;color:#878787;font-size:12px}
+      @media print{body{padding:16px}}
+    </style></head><body>
+      <div class="row">
+        <div>
+          <h1>Invoice</h1>
+          <div class="muted">Order #${order.id} · Placed on ${escapeHtml(placedOn)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700;font-size:16px">SUVCRAFT</div>
+          <div class="muted">Tax Invoice</div>
+        </div>
+      </div>
+
+      <div class="row box">
+        <div>
+          <h3>Bill To</h3>
+          <div>${escapeHtml(a.name || order.customer || "")}</div>
+          ${a.address ? `<div>${escapeHtml(a.address)}${a.landmark ? `, ${escapeHtml(a.landmark)}` : ""}</div>` : ""}
+          ${(a.city || a.state || a.pincode || a.zip) ? `<div>${[a.city, a.state, a.pincode || a.zip].filter(Boolean).map(escapeHtml).join(", ")}</div>` : ""}
+          ${a.mobile ? `<div>${escapeHtml(a.mobile)}</div>` : ""}
+          ${a.email || order.customer_email ? `<div>${escapeHtml(a.email || order.customer_email)}</div>` : ""}
+        </div>
+        <div style="text-align:right">
+          <h3>Payment</h3>
+          <div>${escapeHtml((order.payment_method || "—").toUpperCase())}</div>
+          ${order.transaction?.txn_id || order.transaction?.payu_txn_id ? `<div class="muted">Txn: ${escapeHtml(order.transaction?.txn_id || order.transaction?.payu_txn_id)}</div>` : ""}
+        </div>
+      </div>
+
+      <table>
+        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Subtotal</th></tr></thead>
+        <tbody>${itemsRows}</tbody>
+      </table>
+
+      <div class="totals">
+        <div class="line"><span>Subtotal</span><span>${fmtAmt(subTotal)}</span></div>
+        ${Number(order.delivery_charge) > 0 ? `<div class="line"><span>Delivery</span><span>${fmtAmt(order.delivery_charge)}</span></div>` : `<div class="line"><span>Delivery</span><span>${fmtAmt(0)}</span></div>`}
+        ${Number(order.discount) > 0 ? `<div class="line"><span>Discount</span><span>-${fmtAmt(order.discount)}</span></div>` : ""}
+        ${Number(order.promo_discount) > 0 ? `<div class="line"><span>Promo${order.promo_code ? ` (${escapeHtml(order.promo_code)})` : ""}</span><span>-${fmtAmt(order.promo_discount)}</span></div>` : ""}
+        ${taxAmt > 0 ? `<div class="line"><span>Tax</span><span>+${fmtAmt(taxAmt)}</span></div>` : ""}
+        <div class="line grand"><span>Total</span><span>${fmtAmt(order.final_total ?? order.total)}</span></div>
+      </div>
+
+      <div class="foot">Thank you for shopping with SUVCRAFT.</div>
+      <script>window.addEventListener('load',()=>{setTimeout(()=>window.print(),200)})</script>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+  }
+
   async function cancelOrder() {
     if (!order) return;
     if (!confirm("Cancel this order? This cannot be undone.")) return;
@@ -243,6 +328,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={downloadInvoice}
             className="inline-flex h-[40px] items-center justify-center gap-1.5 rounded-[8px] border border-[#e7e7e7] bg-white px-4 text-[13px] font-semibold text-ink hover:border-ink"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
