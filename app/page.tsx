@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { api } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +16,19 @@ export default async function Home({
   const categoryId = resolved?.category_id;
   const typeSlug = resolved?.type;
 
+  // Category browsing lives on /products now — bounce any /?category_id=… or
+  // /?type=… link there so we don't have two pages doing the same thing.
+  if (categoryId || typeSlug) {
+    const params = new URLSearchParams();
+    if (categoryId) params.set("category_id", String(categoryId));
+    if (typeSlug) params.set("type", String(typeSlug));
+    redirect(`/products?${params.toString()}`);
+  }
+
   const [productsData, categoriesData, categoryTabsData, slidersData, settingsData, collectionsData] = await Promise.allSettled([
-    api.products({
-      per_page: 20,
-      status: "1",
-      ...(categoryId ? { category_id: categoryId } : {}),
-      ...(typeSlug ? { type: typeSlug } : {}),
-    }),
+    api.products({ per_page: 20, status: "1" }),
     api.categories(),
-    api.categoryTabs(categoryId ? { category_id: categoryId } : undefined),
+    api.categoryTabs(),
     api.sliders({ type: "hero" }),
     api.settings(),
     api.collections(),
@@ -46,19 +51,15 @@ export default async function Home({
     ? topSellingResult.rows
     : products.slice(0, 4);
 
-  const showHero = !categoryId;
-
   return (
     <>
-      {showHero && <Hero sliders={sliders} />}
-      {showHero && <TopSelling products={topSellingProducts} settings={settings} />}
-      {showHero && <BagCollection collections={collections} />}
+      <Hero sliders={sliders} />
+      <TopSelling products={topSellingProducts} settings={settings} />
+      <BagCollection collections={collections} />
       <AllProducts
         products={products}
         categories={categories}
         categoryTabs={categoryTabs}
-        selectedCategoryId={categoryId ? Number(categoryId) : undefined}
-        selectedTypeSlug={typeSlug}
       />
     </>
   );

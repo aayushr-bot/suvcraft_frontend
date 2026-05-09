@@ -122,7 +122,7 @@ export default function AllProducts({
     const params = new URLSearchParams(baseQuery);
     if (tabSlug) params.set("type", tabSlug);
     const qs = params.toString();
-    return qs ? `/?${qs}` : "/";
+    return qs ? `/products?${qs}` : "/products";
   };
 
   function scroll(dir: -1 | 1) {

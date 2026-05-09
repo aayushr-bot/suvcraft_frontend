@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { IoCart } from "react-icons/io5";
 import ProductImage from "../components/ProductImage";
 import { type Product, type CategoryTab, type SiteSettings, imgUrl } from "@/lib/api";
@@ -46,8 +45,9 @@ export default function ProductsClient({
   categoryId?: string;
   settings: SiteSettings;
 }) {
-  const router = useRouter();
+  const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(10000);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [colorFilter, setColorFilter] = useState<Set<string>>(new Set());
   const [conditionFilter, setConditionFilter] = useState<Set<string>>(new Set());
   const [showCount, setShowCount] = useState<10 | 20 | 50 | 100>(50);
@@ -85,16 +85,25 @@ export default function ProductsClient({
 
   const filteredAndSorted = useMemo(() => {
     let list = [...products];
-    if (priceMax < 10000) {
+    if (priceMin > 0 || priceMax < 10000) {
       list = list.filter((p) => {
         const price = Number(p.special_price ?? 0) || Number(p.price ?? 0);
-        return price <= priceMax;
+        return price >= priceMin && price <= priceMax;
       });
     }
     if (colorFilter.size > 0) {
       list = list.filter((p) => {
         const colors = (p as Product & { colors?: { value: string }[] }).colors || [];
         return colors.some((c) => colorFilter.has(String(c.value).trim()));
+      });
+    }
+    if (conditionFilter.size > 0) {
+      // Schema has no condition column yet, so we treat every product as "New"
+      // by default. Filtering only matches when the buyer's selected set
+      // contains the product's effective condition.
+      list = list.filter((p) => {
+        const cond = (p as Product & { condition?: string }).condition || "New";
+        return conditionFilter.has(cond);
       });
     }
     switch (sortBy) {
@@ -120,22 +129,191 @@ export default function ProductsClient({
   const customerLabel = (settings.products_customer_label || "").trim();
   const showCustomerBlock = avatars.length > 0 && customerCount.length > 0;
 
+  // Shared filter card — rendered both in the desktop sidebar and the mobile
+  // off-canvas drawer. Buttons close the drawer when present so a tap on the
+  // primary CTA also dismisses it on small screens.
+  const filterCard = (
+    <div className="rounded-[16px] border border-[#e7e7e7] bg-white p-5 flex flex-col gap-5">
+      <div>
+        <h3 className="text-[15px] font-bold text-ink mb-4">Fill by price</h3>
+        <div className="relative mb-5 h-[4px] bg-[#e7e7e7] rounded-full">
+          <span className="absolute left-0 top-0 h-[4px] w-[60px] bg-[#BCE3C9] rounded-full" />
+        </div>
+        {(() => {
+          const SLIDER_MIN = 0;
+          const SLIDER_MAX = 10000;
+          const STEP = 100;
+          const minPct = ((priceMin - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+          const maxPct = ((priceMax - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+          return (
+            <>
+              <div className="relative h-6 select-none">
+                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] rounded-full bg-[#e7e7e7]" />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 h-[6px] rounded-full bg-[#3E0149]"
+                  style={{ left: `${minPct}%`, right: `${100 - maxPct}%` }}
+                />
+                <input
+                  type="range"
+                  min={SLIDER_MIN}
+                  max={SLIDER_MAX}
+                  step={STEP}
+                  value={priceMin}
+                  onChange={(e) => {
+                    const next = Math.min(Number(e.target.value), priceMax - STEP);
+                    setPriceMin(next);
+                  }}
+                  aria-label="Minimum price"
+                  className="dual-range absolute inset-0 w-full appearance-none bg-transparent pointer-events-none"
+                />
+                <input
+                  type="range"
+                  min={SLIDER_MIN}
+                  max={SLIDER_MAX}
+                  step={STEP}
+                  value={priceMax}
+                  onChange={(e) => {
+                    const next = Math.max(Number(e.target.value), priceMin + STEP);
+                    setPriceMax(next);
+                  }}
+                  aria-label="Maximum price"
+                  className="dual-range absolute inset-0 w-full appearance-none bg-transparent pointer-events-none"
+                />
+              </div>
+              <div className="mt-3 flex items-center justify-between text-[12px]">
+                <span className="text-[#8c8c8c]">From: <span className="font-semibold text-ink">₹{priceMin.toLocaleString("en-IN")}</span></span>
+                <span className="text-[#8c8c8c]">To: <span className="font-semibold text-ink">₹{priceMax.toLocaleString("en-IN")}</span></span>
+              </div>
+              <style jsx>{`
+                .dual-range::-webkit-slider-thumb {
+                  appearance: none;
+                  pointer-events: auto;
+                  width: 20px;
+                  height: 20px;
+                  border-radius: 9999px;
+                  background: #3E0149;
+                  border: 0;
+                  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+                  cursor: pointer;
+                }
+                .dual-range::-moz-range-thumb {
+                  pointer-events: auto;
+                  width: 20px;
+                  height: 20px;
+                  border-radius: 9999px;
+                  background: #3E0149;
+                  border: 0;
+                  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+                  cursor: pointer;
+                }
+                .dual-range::-webkit-slider-runnable-track { background: transparent; }
+                .dual-range::-moz-range-track { background: transparent; }
+              `}</style>
+            </>
+          );
+        })()}
+      </div>
+
+      {colorCounts.length > 0 && (
+        <div>
+          <h4 className="text-[14px] font-semibold text-ink mb-3">Color</h4>
+          <div className="flex flex-col gap-3">
+            {colorCounts.map(([name, count]) => {
+              const checked = colorFilter.has(name);
+              return (
+                <label key={name} className="flex items-center gap-2 cursor-pointer text-[13px] text-[#525151] hover:text-ink">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      setColorFilter((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.delete(name); else next.add(name);
+                        return next;
+                      });
+                    }}
+                    className="h-4 w-4 rounded border-[#cfcfcf]"
+                  />
+                  <span>{name} <span className="text-[#8c8c8c]">({count})</span></span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h4 className="text-[14px] font-semibold text-ink mb-3">Item Condition</h4>
+        <div className="flex flex-col gap-3">
+          {[
+            { name: "New", count: products.length },
+            { name: "Refurbished", count: 0 },
+            { name: "Used", count: 0 },
+          ].map((c) => {
+            const checked = conditionFilter.has(c.name);
+            return (
+              <label key={c.name} className="flex items-center gap-2 cursor-pointer text-[13px] text-[#525151] hover:text-ink">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    setConditionFilter((prev) => {
+                      const next = new Set(prev);
+                      if (checked) next.delete(c.name); else next.add(c.name);
+                      return next;
+                    });
+                  }}
+                  className="h-4 w-4 rounded border-[#cfcfcf]"
+                />
+                <span>{c.name} <span className="text-[#8c8c8c]">({c.count})</span></span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setMobileFilterOpen(false)}
+        className="h-[44px] rounded-[10px] bg-brand-purple text-white text-[13px] font-bold hover:brightness-110 inline-flex items-center justify-center gap-2"
+      >
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+        Filter
+      </button>
+    </div>
+  );
+
   return (
     <div
       className="min-h-screen"
       style={{ background: "linear-gradient(179.62deg, #FFF6DE 0.33%, #FFFFFF 12.73%)" }}
     >
-      <div className="mx-auto w-full max-w-[1440px] px-4 py-10 md:px-8">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-3 pb-10 md:px-8 md:pt-10">
       {/* Top heading row */}
-      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mb-8">
-        <div>
-          <h1 className="text-[32px] md:text-[40px] font-bold text-ink leading-tight">Our All Products</h1>
-          <p className="mt-2 text-[14px] text-[#8c8c8c] max-w-[400px]">
+      <div className="flex items-start justify-between gap-4 md:items-end md:justify-between mb-6 md:mb-8">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[22px] md:text-[40px] font-bold text-ink leading-tight">Our All Products</h1>
+          <p className="mt-1.5 md:mt-2 text-[12px] md:text-[14px] text-[#8c8c8c] max-w-[400px]">
             What is Lorem Ipsum? Lorem Ipsum is simply dummy text of the
           </p>
         </div>
+        {/* Mobile-only filter trigger */}
+        <button
+          type="button"
+          onClick={() => setMobileFilterOpen(true)}
+          aria-label="Open filters"
+          className="md:hidden flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-[#e7e7e7] bg-white text-[#525151]"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="7" y1="12" x2="17" y2="12" />
+            <line x1="10" y1="18" x2="14" y2="18" />
+          </svg>
+        </button>
         {showCustomerBlock && (
-          <div className="flex flex-col items-center gap-2">
+          <div className="hidden md:flex flex-col items-center gap-2">
             <div className="flex -space-x-3">
               {avatars.map((src, i) => (
                 /* eslint-disable-next-line @next/next/no-img-element */
@@ -157,8 +335,36 @@ export default function ProductsClient({
       </div>
 
       {/* Tabs + dropdowns row */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6 md:mb-8">
+        {/* Mobile: underline tabs with horizontal scroll */}
+        <div className="md:hidden -mx-4 overflow-x-auto border-b border-[#e7e7e7]" style={{ scrollbarWidth: "none" }}>
+          <div className="flex items-center gap-6 px-4 whitespace-nowrap">
+            <Link
+              href={buildTabHref()}
+              scroll={false}
+              className={`relative pb-2.5 text-[14px] ${isAllTabsActive ? "font-semibold text-ink" : "font-normal text-[#8c8c8c]"}`}
+            >
+              All
+              {isAllTabsActive && <span className="absolute left-0 right-0 -bottom-[1px] h-[2px] bg-ink" />}
+            </Link>
+            {categoryTabs.map((t) => {
+              const isActive = selectedTypeSlug === t.slug;
+              return (
+                <Link
+                  key={t.slug}
+                  href={buildTabHref(t.slug)}
+                  scroll={false}
+                  className={`relative pb-2.5 text-[14px] ${isActive ? "font-semibold text-ink" : "font-normal text-[#8c8c8c]"}`}
+                >
+                  {t.label}
+                  {isActive && <span className="absolute left-0 right-0 -bottom-[1px] h-[2px] bg-ink" />}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+        {/* Desktop: pill tabs */}
+        <div className="hidden md:flex flex-wrap items-center gap-3">
           <Link
             href={buildTabHref()}
             scroll={false}
@@ -167,7 +373,7 @@ export default function ProductsClient({
               : "inline-flex h-[40px] items-center justify-center rounded-full border border-[#cfcfcf] px-6 text-[13px] font-normal text-[#525151] hover:bg-black/5"
             }
           >
-            Shop
+            All
           </Link>
           {categoryTabs.map((t) => {
             const isActive = selectedTypeSlug === t.slug;
@@ -186,7 +392,7 @@ export default function ProductsClient({
             );
           })}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-3">
           <label className="relative inline-flex h-[40px] items-center gap-2 rounded-[10px] border border-[#e7e7e7] bg-white pl-4 pr-9 text-[13px] text-[#525151] cursor-pointer">
             {/* Grid icon */}
             <svg className="h-4 w-4 text-[#525151]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -235,95 +441,9 @@ export default function ProductsClient({
 
       {/* Two-column body */}
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
-        {/* Sidebar */}
-        <aside className="flex flex-col gap-6">
-          <div className="rounded-[16px] border border-[#e7e7e7] bg-white p-5 flex flex-col gap-5">
-            <div>
-              <h3 className="text-[15px] font-bold text-ink mb-3">Fill by price</h3>
-              <input
-                type="range"
-                min={0}
-                max={10000}
-                step={100}
-                value={priceMax}
-                onChange={(e) => setPriceMax(Number(e.target.value))}
-                className="w-full accent-brand-purple"
-              />
-              <div className="mt-2 flex items-center justify-between text-[12px]">
-                <span className="text-[#8c8c8c]">From: <span className="font-semibold text-ink">₹0</span></span>
-                <span className="text-[#8c8c8c]">To: <span className="font-semibold text-ink">₹{priceMax.toLocaleString("en-IN")}</span></span>
-              </div>
-            </div>
-
-            {colorCounts.length > 0 && (
-              <div>
-                <h4 className="text-[14px] font-semibold text-ink mb-3">Color</h4>
-                <div className="flex flex-col gap-2">
-                  {colorCounts.map(([name, count]) => {
-                    const checked = colorFilter.has(name);
-                    return (
-                      <label key={name} className="flex items-center gap-2 cursor-pointer text-[13px] text-[#525151] hover:text-ink">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            setColorFilter((prev) => {
-                              const next = new Set(prev);
-                              if (checked) next.delete(name); else next.add(name);
-                              return next;
-                            });
-                          }}
-                          className="h-4 w-4 rounded border-[#cfcfcf]"
-                        />
-                        <span>{name} <span className="text-[#8c8c8c]">({count})</span></span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <h4 className="text-[14px] font-semibold text-ink mb-3">Item Condition</h4>
-              <div className="flex flex-col gap-2">
-                {[
-                  { name: "New", count: products.length },
-                  { name: "Refurbished", count: 0 },
-                  { name: "Used", count: 0 },
-                ].map((c) => {
-                  const checked = conditionFilter.has(c.name);
-                  return (
-                    <label key={c.name} className="flex items-center gap-2 cursor-pointer text-[13px] text-[#525151] hover:text-ink">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          setConditionFilter((prev) => {
-                            const next = new Set(prev);
-                            if (checked) next.delete(c.name); else next.add(c.name);
-                            return next;
-                          });
-                        }}
-                        className="h-4 w-4 rounded border-[#cfcfcf]"
-                      />
-                      <span>{c.name} <span className="text-[#8c8c8c]">({c.count})</span></span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => router.refresh()}
-              className="h-[44px] rounded-[10px] bg-brand-purple text-white text-[13px] font-bold hover:brightness-110 inline-flex items-center justify-center gap-2"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
-              Filter
-            </button>
-          </div>
+        {/* Sidebar — desktop only */}
+        <aside className="hidden lg:flex flex-col gap-6">
+          {filterCard}
         </aside>
 
         {/* Grid */}
@@ -369,12 +489,13 @@ export default function ProductsClient({
                         <Star className="h-3 w-3 text-[#f5a524]" />
                         <span>({Number(p.rating || 4).toFixed(1)})</span>
                       </div>
-                      <span className="inline-flex w-fit items-center gap-1 rounded-[4px] bg-[#f6e8fb] px-2 py-0.5 text-[10px] font-semibold text-[#3E0149]">
-                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#3E0149]">
-                          <IoCart className="h-2 w-2 text-[#FFE602]" />
+                      <div className="inline-flex w-fit items-center gap-1.5 text-[11px] text-[#525151]">
+                        <span>By</span>
+                        <span className="inline-flex items-center rounded-[4px] bg-[#f6e8fb] px-1.5 py-0.5">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/figma/suvcraft-logo2.png" alt="SUVCRAFT" className="h-4 object-contain" />
                         </span>
-                        By: SUVCRAFT
-                      </span>
+                      </div>
                       <div className="mt-1 flex items-center justify-between">
                         <div className="flex items-baseline gap-1.5">
                           <span className="text-[14px] font-bold text-ink">{fmt(cur)}</span>
@@ -388,9 +509,9 @@ export default function ProductsClient({
                             e.stopPropagation();
                             window.location.href = `${BASE}/product/${p.id}`;
                           }}
-                          className="inline-flex h-[28px] items-center justify-center gap-1 rounded-[6px] bg-[#3E0149] px-2.5 text-[11px] font-semibold text-white hover:brightness-110"
+                          className="inline-flex h-[28px] sm:h-[34px] items-center justify-center gap-1 sm:gap-1.5 rounded-[4px] bg-[#3E0149] px-2.5 sm:px-3.5 text-[11px] sm:text-[12px] font-semibold text-white hover:brightness-110"
                         >
-                          <IoCart className="h-3 w-3" />
+                          <IoCart className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                           Add
                         </button>
                       </div>
@@ -403,6 +524,78 @@ export default function ProductsClient({
         </div>
       </div>
       </div>
+
+      {/* Mobile filter drawer */}
+      {mobileFilterOpen && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 z-[100] bg-black/40"
+            onClick={() => setMobileFilterOpen(false)}
+          />
+          <aside className="lg:hidden fixed right-0 top-0 z-[101] flex h-full w-[88%] max-w-[360px] flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#eee] px-5 py-4">
+              <h2 className="text-[16px] font-bold text-ink">Filters</h2>
+              <button
+                type="button"
+                onClick={() => setMobileFilterOpen(false)}
+                aria-label="Close filters"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[#525151] hover:bg-[#f5f5f5]"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
+              {/* Mobile-only Show + Sort dropdowns (hidden in desktop header) */}
+              <div className="grid grid-cols-2 gap-2">
+                <label className="relative flex h-[40px] items-center gap-2 rounded-[10px] border border-[#e7e7e7] bg-white pl-3 pr-7 text-[12px] text-[#525151] cursor-pointer">
+                  <svg className="h-4 w-4 shrink-0 text-[#525151]" viewBox="0 0 16 16" fill="currentColor">
+                    <rect x="1" y="1" width="6" height="6" rx="1" />
+                    <rect x="9" y="1" width="6" height="6" rx="1" />
+                    <rect x="1" y="9" width="6" height="6" rx="1" />
+                    <rect x="9" y="9" width="6" height="6" rx="1" />
+                  </svg>
+                  <span className="truncate">Show: {showCount}</span>
+                  <select
+                    value={showCount}
+                    onChange={(e) => setShowCount(Number(e.target.value) as 10 | 20 | 50 | 100)}
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                    aria-label="Show count"
+                  >
+                    <option value={10}>Show: 10</option>
+                    <option value={20}>Show: 20</option>
+                    <option value={50}>Show: 50</option>
+                    <option value={100}>Show: 100</option>
+                  </select>
+                  <svg className="absolute right-2 h-3 w-3 text-[#525151] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                </label>
+                <label className="relative flex h-[40px] items-center gap-2 rounded-[10px] border border-[#e7e7e7] bg-white pl-3 pr-7 text-[12px] text-[#525151] cursor-pointer">
+                  <svg className="h-4 w-4 shrink-0 text-[#525151]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <path d="M2 4h12" />
+                    <path d="M4 8h8" />
+                    <path d="M6 12h4" />
+                  </svg>
+                  <span className="truncate">{sortBy === "featured" ? "Featured" : sortBy === "price-low" ? "Price ↑" : sortBy === "price-high" ? "Price ↓" : "Rating"}</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                    aria-label="Sort by"
+                  >
+                    <option value="featured">Sort by: Featured</option>
+                    <option value="price-low">Sort by: Price (Low to High)</option>
+                    <option value="price-high">Sort by: Price (High to Low)</option>
+                    <option value="rating">Sort by: Rating</option>
+                  </select>
+                  <svg className="absolute right-2 h-3 w-3 text-[#525151] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                </label>
+              </div>
+              {filterCard}
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 }

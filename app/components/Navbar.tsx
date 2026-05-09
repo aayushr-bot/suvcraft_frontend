@@ -67,8 +67,10 @@ export default function Navbar(props: NavbarProps) {
 function NavbarWithSearchParams(props: NavbarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isHome = pathname === "/";
-  const cid = isHome ? Number(searchParams.get("category_id") || 0) : -1;
+  // Highlight the active category whenever a category_id is in the URL — both
+  // the home page and the catalog page use this query param.
+  const tracksCategory = pathname === "/" || pathname === "/products";
+  const cid = tracksCategory ? Number(searchParams.get("category_id") || 0) : -1;
   return <NavbarInner {...props} activeCategoryId={cid} />;
 }
 
@@ -77,11 +79,10 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   const brand = siteTitle || "SUVCRAFT";
   const navLinks = [
     SHOP_LINK,
-    ...categories.map((c) => ({ id: c.id, label: c.name, href: `/?category_id=${c.id}`, slug: c.slug })),
+    ...categories.map((c) => ({ id: c.id, label: c.name, href: `/products?category_id=${c.id}`, slug: c.slug })),
   ];
   const pathname = usePathname();
   const router = useRouter();
-  const isOrdersRoute = pathname === "/orders" || pathname.startsWith("/orders/");
   const isSimplifiedHeader = pathname === "/cart" || pathname === "/checkout" || pathname === "/payment" || pathname === "/payment-success";
   // Only the singular detail route (/product/[id]) gets the white-nav treatment.
   // The trailing slash matters — without it this also matched /products (the
@@ -95,7 +96,9 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   const isWhiteBody = isProductPage
     || pathname === "/profile"
     || pathname === "/addresses"
-    || pathname === "/saved-cards";
+    || pathname === "/saved-cards"
+    || pathname === "/orders"
+    || pathname.startsWith("/orders/");
 
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);
@@ -192,8 +195,6 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
     }
   }
 
-  if (isOrdersRoute) return null;
-
   if (isSimplifiedHeader) {
     return (
       <header className="w-full bg-white">
@@ -225,7 +226,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
 
   return (
     <header
-      className={`w-full ${isProductPage ? "bg-white" : ""}`}
+      className={`w-full ${isWhiteBody ? "bg-white" : ""}`}
       style={isProductsCatalog ? { background: "#FFF6DE" } : undefined}
     >
       <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 md:px-8 md:pt-6">
@@ -306,7 +307,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
                   {isOpen && (
                     <div className="absolute left-0 top-full mt-1 z-50 min-w-[200px] rounded-[10px] border border-[#e7e7e7] bg-white py-1 shadow-lg">
                       <Link
-                        href={`/?category_id=${c.id}`}
+                        href={`/products?category_id=${c.id}`}
                         onClick={() => setHoveredCatId(null)}
                         className="block px-4 py-2 text-[13px] font-semibold text-ink hover:bg-[#f6f6f6]"
                       >
@@ -315,7 +316,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
                       {tabs.map((t) => (
                         <Link
                           key={t.id}
-                          href={`/?category_id=${c.id}&type=${t.slug}`}
+                          href={`/products?category_id=${c.id}&type=${t.slug}`}
                           onClick={() => setHoveredCatId(null)}
                           className="block px-4 py-2 text-[13px] text-[#525151] hover:bg-[#f6f6f6] hover:text-ink"
                         >
