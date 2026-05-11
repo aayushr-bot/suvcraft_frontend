@@ -100,6 +100,12 @@ export default function CartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Refresh per-product limits and flags (stock, tax, is_returnable …) whenever
+  // the *set* of cart lines changes (added/removed). We deliberately key off the
+  // joined line ids — not `items` itself — so quantity edits don't trigger a
+  // refetch loop, while server/localStorage hydration (which arrives a tick
+  // after mount with an empty array) still kicks the effect.
+  const cartLineKey = items.map((i) => `${i.id}:${i.variant_id ?? 0}`).join(",");
   useEffect(() => {
     let cancelled = false;
     items.forEach((item) => {
@@ -121,6 +127,7 @@ export default function CartPage() {
             stock: p.stock,
             tax_percentage: Number(p.tax_percentage || 0),
             is_prices_inclusive_tax: Number(p.is_prices_inclusive_tax || 0),
+            is_returnable: Number(p.is_returnable ?? 1),
           });
           if (Number.isFinite(maxQ) && item.qty > maxQ) {
             if (maxQ < minQ) {
@@ -145,7 +152,7 @@ export default function CartPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cartLineKey]);
 
   function changeQty(item: typeof items[number], delta: number) {
     const k = lineKey(item);
@@ -350,6 +357,17 @@ export default function CartPage() {
                               <span>{item.color.name}</span>
                             </span>
                           )}
+                        </div>
+                      )}
+
+                      {item.is_returnable != null && Number(item.is_returnable) === 0 && (
+                        <div className="inline-flex w-fit items-center gap-1.5 rounded-[6px] bg-[#FEF2F2] px-2.5 py-1 text-[11px] sm:text-[12px] font-semibold text-[#B42318]">
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          No Returns · Only Exchange
                         </div>
                       )}
 

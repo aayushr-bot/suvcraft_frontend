@@ -14,6 +14,9 @@ export type CartItem = {
   stock?: number;
   tax_percentage?: number;
   is_prices_inclusive_tax?: number;
+  // 0 = product is not returnable (cart shows "No Returns · Only Exchange").
+  // 1 = returnable. Undefined when the cart hasn't refreshed yet — treated as returnable.
+  is_returnable?: number;
   size?: string;
   color?: { name: string; swatch?: string };
   variant_id?: number;
@@ -25,7 +28,7 @@ type Action =
   | { type: "ADD"; item: Omit<CartItem, "qty">; qty: number }
   | { type: "REMOVE"; id: number }
   | { type: "SET_QTY"; id: number; qty: number }
-  | { type: "UPDATE_LIMITS"; id: number; limits: Partial<Pick<CartItem, "minQty" | "maxQty" | "step" | "stock" | "tax_percentage" | "is_prices_inclusive_tax">> }
+  | { type: "UPDATE_LIMITS"; id: number; limits: Partial<Pick<CartItem, "minQty" | "maxQty" | "step" | "stock" | "tax_percentage" | "is_prices_inclusive_tax" | "is_returnable">> }
   | { type: "MOVE_TO_SAVED"; id: number }
   | { type: "MOVE_TO_CART"; id: number }
   | { type: "REMOVE_SAVED"; id: number }
@@ -118,7 +121,7 @@ type CartContextType = {
   addToCart: (item: Omit<CartItem, "qty">, qty?: number) => void;
   removeFromCart: (id: number) => void;
   updateQty: (id: number, qty: number) => void;
-  updateLimits: (id: number, limits: Partial<Pick<CartItem, "minQty" | "maxQty" | "step" | "stock" | "tax_percentage" | "is_prices_inclusive_tax">>) => void;
+  updateLimits: (id: number, limits: Partial<Pick<CartItem, "minQty" | "maxQty" | "step" | "stock" | "tax_percentage" | "is_prices_inclusive_tax" | "is_returnable">>) => void;
   moveToSaved: (id: number) => void;
   moveToCart: (id: number) => void;
   removeFromSaved: (id: number) => void;

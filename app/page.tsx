@@ -60,6 +60,7 @@ export default async function Home({
         products={products}
         categories={categories}
         categoryTabs={categoryTabs}
+        settings={settings}
       />
     </>
   );

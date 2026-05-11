@@ -6,7 +6,7 @@ import { IoMdHeartEmpty } from "react-icons/io";
 import { IoCart } from "react-icons/io5";
 import ProductImage from "./ProductImage";
 import QuickAddModal from "./QuickAddModal";
-import { type Product, type Category, type CategoryTab, imgUrl } from "@/lib/api";
+import { type Product, type Category, type CategoryTab, type SiteSettings, imgUrl } from "@/lib/api";
 import { useWishlist } from "@/lib/wishlistContext";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -41,12 +41,14 @@ export default function AllProducts({
   categoryTabs = [],
   selectedCategoryId,
   selectedTypeSlug,
+  settings = {},
 }: {
   products: Product[];
   categories: Category[];
   categoryTabs?: CategoryTab[];
   selectedCategoryId?: number;
   selectedTypeSlug?: string;
+  settings?: SiteSettings;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wishlist = useWishlist();
@@ -144,12 +146,14 @@ export default function AllProducts({
   return (
     <section id="all-products" className="mx-auto w-full max-w-[1440px] px-4 pt-12 pb-10 md:px-8 scroll-mt-24">
       <h2 className="font-sans text-[22px] font-semibold leading-tight text-ink md:text-[28px]">
-        {activeCategory ? activeCategory.name : "Our All Products"}
+        {activeCategory
+          ? activeCategory.name
+          : ((settings.products_title || "").trim() || "Our All Products")}
       </h2>
       <p className="mt-2 max-w-[340px] text-[13px] leading-[1.55] text-[#525151]">
         {activeCategory
           ? `Browse all products in ${activeCategory.name}.`
-          : "Browse our complete collection of premium bags and accessories."}
+          : ((settings.products_description || "").trim() || "Browse our complete collection of premium bags and accessories.")}
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
