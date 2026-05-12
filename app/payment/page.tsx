@@ -19,6 +19,10 @@ const METHODS = [
   { id: "upi", label: "UPI" },
 ];
 
+function fmtAmt(n: number) {
+  return `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
 export default function PaymentPage() {
   const router = useRouter();
   const { items, total, count, clearCart, taxTotal, deliveryCharge, coupon, couponDiscount, finalTotal, removeCoupon } = useCart();
@@ -28,6 +32,40 @@ export default function PaymentPage() {
   const [error, setError] = useState("");
   const [savedAddress, setSavedAddress] = useState<Address | null>(null);
   const [productInfo, setProductInfo] = useState<Record<number, { mrp?: number }>>({});
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletLoaded, setWalletLoaded] = useState(false);
+  const [walletMethodEnabled, setWalletMethodEnabled] = useState(true);
+  const [useWallet, setUseWallet] = useState(false);
+
+  // Pull the user's wallet balance and the admin-controlled "wallet method"
+  // enable flag. If admin has turned the wallet off, the option is hidden
+  // entirely no matter how much balance the user has.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch(`${API}/api/v1/wallet`, { credentials: "include", cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(`${API}/api/v1/settings`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]).then(([w, s]) => {
+      if (cancelled) return;
+      if (w?.data) setWalletBalance(Number(w.data.balance || 0));
+      if (s?.data) {
+        const flag = s.data.wallet_method;
+        setWalletMethodEnabled(flag == null ? true : Number(flag) === 1);
+      }
+      setWalletLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Wallet computations. `walletApplied` is how much will come out of the
+  // wallet for this order; the remainder is owed via the chosen payment method.
+  const walletApplied = useWallet ? Math.min(walletBalance, finalTotal || 0) : 0;
+  const remainingDue = Math.max(0, (finalTotal || 0) - walletApplied);
+  const walletCoversAll = useWallet && walletApplied >= (finalTotal || 0) && (finalTotal || 0) > 0;
 
   useEffect(() => {
     try {
@@ -96,11 +134,15 @@ export default function PaymentPage() {
       return;
     }
 
-    // Basic validation for non-COD methods
-    if (method === "upi" && !upiId.trim()) { setError("Please enter your UPI ID."); return; }
-    if (method === "card") {
-      if (!cardNo.trim() || !cardExp.trim() || !cardCvv.trim()) {
-        setError("Please fill all card details."); return;
+    // Validate the fallback payment method only when there's still a remainder
+    // to charge after the wallet is applied. When wallet covers everything, the
+    // method selector is hidden and there's nothing to validate.
+    if (!walletCoversAll) {
+      if (method === "upi" && !upiId.trim()) { setError("Please enter your UPI ID."); return; }
+      if (method === "card") {
+        if (!cardNo.trim() || !cardExp.trim() || !cardCvv.trim()) {
+          setError("Please fill all card details."); return;
+        }
       }
     }
 
@@ -120,7 +162,8 @@ export default function PaymentPage() {
           state: address.state,
           zip: address.pincode || address.zip,
           address_id: address.id ? Number(address.id) : undefined,
-          payment_method: method,
+          payment_method: walletCoversAll ? "wallet" : method,
+          use_wallet: useWallet ? true : undefined,
           items: items.map((i) => ({ id: i.id, name: i.name, image: i.image, price: i.price, qty: i.qty, variant_id: i.variant_id })),
           promo_code: coupon?.code || undefined,
         }),
@@ -174,25 +217,60 @@ export default function PaymentPage() {
             <div className="mx-8 md:mx-10 border-t border-dashed border-[#e7e7e7]" />
 
             <div className="p-8 md:p-10">
-            {/* Method selector — horizontal radio row */}
-            <div className="mb-6">
-              <p className="text-[14px] font-semibold text-ink mb-3">Pay With:</p>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                {METHODS.map((m) => (
-                  <label key={m.id} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment_method"
-                      value={m.id}
-                      checked={method === m.id}
-                      onChange={() => { setMethod(m.id); setError(""); }}
-                      className="h-4 w-4 accent-emerald-500"
-                    />
-                    <span className="text-[14px] text-ink">{m.label}</span>
-                  </label>
-                ))}
+            {/* Wallet toggle — shown when the admin has the wallet method
+                enabled AND the user has any balance. Applies up to the order
+                total from their wallet; remaining amount falls back to the
+                payment method chosen below. */}
+            {walletLoaded && walletMethodEnabled && walletBalance > 0 && (
+              <div className="mb-5 rounded-[12px] border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useWallet}
+                    onChange={(e) => { setUseWallet(e.target.checked); setError(""); }}
+                    className="mt-0.5 h-4 w-4 accent-emerald-600"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[14px] font-semibold text-emerald-900">Apply Wallet Balance</span>
+                      <span className="text-[12px] text-emerald-700">({fmtAmt(walletBalance)} available)</span>
+                    </div>
+                    {useWallet && (
+                      <p className="mt-1 text-[12.5px] text-emerald-800">
+                        <span className="font-semibold">{fmtAmt(walletApplied)}</span> will be deducted from your wallet.{" "}
+                        {walletCoversAll
+                          ? <span className="font-semibold">Nothing left to pay.</span>
+                          : <>Remaining <span className="font-semibold">{fmtAmt(remainingDue)}</span> via the method below.</>}
+                      </p>
+                    )}
+                  </div>
+                </label>
               </div>
-            </div>
+            )}
+
+            {/* Payment-method radios — only needed when there's still a remainder to charge. */}
+            {!walletCoversAll && (
+              <div className="mb-6">
+                <p className="text-[14px] font-semibold text-ink mb-3">
+                  {useWallet ? `Pay remaining ${fmtAmt(remainingDue)} with:` : "Pay With:"}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                  {METHODS.map((m) => (
+                    <label key={m.id} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="payment_method"
+                        value={m.id}
+                        checked={method === m.id}
+                        onChange={() => { setMethod(m.id); setError(""); }}
+                        className="h-4 w-4 accent-emerald-500"
+                      />
+                      <span className="text-[14px] text-ink">{m.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Method-specific fields */}
             {method === "card" && (
@@ -264,6 +342,7 @@ export default function PaymentPage() {
             {method === "cod" && (
               <p className="mb-6 text-[14px] text-[#525151]">Pay in cash when your order arrives at your address.</p>
             )}
+
 
             {error && (
               <p className="mb-4 text-[14px] text-red-500 font-medium">{error}</p>

@@ -168,6 +168,8 @@ export type SiteSettings = {
   products_customer_label?: string;
   products_title?: string;
   products_description?: string;
+  // Payment methods — only the storefront-safe flag for wallet is exposed; gateway secrets stay private.
+  wallet_method?: number | string;
   logo?: string;
   app_name?: string;
   // Top-Selling section
