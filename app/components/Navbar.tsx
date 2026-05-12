@@ -185,7 +185,11 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
 
   function handleLogout() {
     fetch(`${API}/api/v1/auth/logout`, { method: "POST", credentials: "include" })
-      .finally(() => { setUser(null); });
+      .finally(() => {
+        setUser(null);
+        // Tell cart/wishlist contexts to re-bootstrap from the (now-guest) source.
+        try { window.dispatchEvent(new Event("auth:changed")); } catch {}
+      });
   }
 
   function openAccount() {
@@ -285,7 +289,16 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
         </div>
 
         {/* Popups */}
-        <AuthModal isOpen={isSignInOpen} onClose={() => setIsSignInOpen(false)} onSuccess={(u) => { setUser(u); setIsSignInOpen(false); }} />
+        <AuthModal
+          isOpen={isSignInOpen}
+          onClose={() => setIsSignInOpen(false)}
+          onSuccess={(u) => {
+            setUser(u);
+            setIsSignInOpen(false);
+            // Refresh cart + wishlist from the user's server-side data.
+            try { window.dispatchEvent(new Event("auth:changed")); } catch {}
+          }}
+        />
         <ContactModal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} />
         <WishlistDrawer open={isWishlistOpen} onClose={() => setIsWishlistOpen(false)} />
 

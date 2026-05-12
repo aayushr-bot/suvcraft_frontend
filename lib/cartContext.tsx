@@ -197,9 +197,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const ready = useRef(false);
   const skipNextSync = useRef(false);
 
+  // Bootstrap the cart from the right source for the current auth state. Run
+  // once on mount and again whenever the Navbar fires `auth:changed` (login or
+  // logout) — otherwise the badge stays stale until the user hits refresh.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const cancelTokens: { cancel: boolean }[] = [];
+
+    async function bootstrap() {
+      const myToken = { cancel: false };
+      // Cancel any in-flight bootstrap from a previous auth event.
+      for (const t of cancelTokens) t.cancel = true;
+      cancelTokens.length = 0;
+      cancelTokens.push(myToken);
+
       let loggedIn = false;
       try {
         const meRes = await fetch(`${API}/api/v1/auth/me`, { credentials: "include", cache: "no-store" });
@@ -208,7 +219,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           loggedIn = !!meJson?.data?.user;
         }
       } catch { /* offline — fall through */ }
-      if (cancelled) return;
+      if (cancelled || myToken.cancel) return;
       setIsLoggedIn(loggedIn);
 
       if (!loggedIn) {
@@ -257,12 +268,29 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         remote = merged;
       }
 
-      if (cancelled) return;
+      if (cancelled || myToken.cancel) return;
       skipNextSync.current = true;
       dispatch({ type: "INIT", items: remote, saved });
       ready.current = true;
-    })();
-    return () => { cancelled = true; };
+    }
+
+    bootstrap();
+
+    function onAuthChanged() {
+      // Wipe state immediately so the navbar count flips to 0 while the new
+      // cart is loading; bootstrap will populate it from the right source.
+      skipNextSync.current = true;
+      dispatch({ type: "INIT", items: [], saved: [] });
+      ready.current = false;
+      bootstrap();
+    }
+    window.addEventListener("auth:changed", onAuthChanged);
+
+    return () => {
+      cancelled = true;
+      for (const t of cancelTokens) t.cancel = true;
+      window.removeEventListener("auth:changed", onAuthChanged);
+    };
   }, []);
 
   // Persist active cart on every change. Saved list is updated through dedicated PATCH calls in the move helpers below.

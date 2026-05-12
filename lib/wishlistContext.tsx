@@ -52,10 +52,19 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const ready = useRef(false);
 
-  // Bootstrap: figure out auth, then pick the right source.
+  // Bootstrap: figure out auth, then pick the right source. Re-runs whenever
+  // the Navbar fires `auth:changed` so the badge updates instantly on
+  // login/logout without a page refresh.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const cancelTokens: { cancel: boolean }[] = [];
+
+    async function bootstrap() {
+      const myToken = { cancel: false };
+      for (const t of cancelTokens) t.cancel = true;
+      cancelTokens.length = 0;
+      cancelTokens.push(myToken);
+
       let loggedIn = false;
       try {
         const me = await fetch(`${API}/api/v1/auth/me`, { credentials: "include", cache: "no-store" });
@@ -64,7 +73,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
           loggedIn = !!j?.data?.user;
         }
       } catch {}
-      if (cancelled) return;
+      if (cancelled || myToken.cancel) return;
       setIsLoggedIn(loggedIn);
 
       if (!loggedIn) {
@@ -100,11 +109,26 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         clearLocal();
       }
 
-      if (cancelled) return;
+      if (cancelled || myToken.cancel) return;
       setItems(remote);
       ready.current = true;
-    })();
-    return () => { cancelled = true; };
+    }
+
+    bootstrap();
+
+    function onAuthChanged() {
+      // Flip to empty so the heart-count badge updates immediately, then refetch.
+      setItems([]);
+      ready.current = false;
+      bootstrap();
+    }
+    window.addEventListener("auth:changed", onAuthChanged);
+
+    return () => {
+      cancelled = true;
+      for (const t of cancelTokens) t.cancel = true;
+      window.removeEventListener("auth:changed", onAuthChanged);
+    };
   }, []);
 
   const ids = new Set(items.map((i) => i.id));

@@ -105,10 +105,13 @@ export default function Hero({ sliders = [] }: { sliders?: Slider[] }) {
             <span className="h-px flex-1 bg-[#cfcfcf]" />
           </div>
 
-          {/* Static label — hidden on mobile to save room for the arrow controls */}
-          <span className="hidden sm:inline-flex h-[36px] items-center justify-center rounded-full border border-[#cfcfcf] px-6 md:px-10 text-[12px] md:text-[13px] font-medium text-ink">
+          {/* Hidden on mobile to save room for the arrow controls */}
+          <Link
+            href="/feature-work"
+            className="hidden sm:inline-flex h-[36px] items-center justify-center rounded-full border border-[#cfcfcf] px-6 md:px-10 text-[12px] md:text-[13px] font-medium text-ink hover:border-ink hover:bg-black/5 transition-colors"
+          >
             Feature Work
-          </span>
+          </Link>
 
           {/* Prev / Next */}
           <button
