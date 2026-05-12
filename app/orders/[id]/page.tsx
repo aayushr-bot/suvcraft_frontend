@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { imgUrl } from "@/lib/api";
 import ProductImage from "../../components/ProductImage";
+import RateProductModal from "../../components/RateProductModal";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -13,6 +14,7 @@ type StatusEntry = { name: string; at: string | null };
 
 type OrderItem = {
   id: number;
+  product_id?: number;
   product_name: string;
   variant_name?: string;
   quantity: number;
@@ -70,14 +72,6 @@ type OrderDetail = {
   } | null;
 };
 
-const TIMELINE_STEPS: { key: string; label: string }[] = [
-  { key: "received", label: "Order Confirmed" },
-  { key: "processed", label: "Packed" },
-  { key: "shipped", label: "Shipped" },
-  { key: "out_for_delivery", label: "Out for Delivery" },
-  { key: "delivered", label: "Delivered" },
-];
-
 const CUSTOMER_CANCELLABLE = new Set(["awaiting", "received"]);
 
 const STATUS_STYLES: Record<string, string> = {
@@ -130,6 +124,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const router = useRouter();
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  // Map from order_item_id -> the rating the buyer just submitted in this
+  // session. Keyed per line item (not per product) so that the same product
+  // appearing in multiple cart rows can carry independent ratings.
+  const [myRatings, setMyRatings] = useState<Record<number, { rating: number; comment: string } | null>>({});
+  const [rateOpen, setRateOpen] = useState(false);
+  const [rateTarget, setRateTarget] = useState<{ productId: number; orderItemId: number; name: string; rating: number; comment: string } | null>(null);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -255,6 +255,24 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       .catch(() => setError("Network error. Please try again."));
   }, [id, router]);
 
+  // We intentionally don't pre-fetch existing ratings here. Seed data and
+  // pre-existing reviews for the product would otherwise label every line item
+  // as "Rated" even when the buyer hasn't rated this specific delivery yet.
+  // The button only flips to "Rated X · Edit" after the buyer submits via the
+  // modal in this session — which is exactly what `myRatings` tracks.
+
+  function openRateModal(productId: number, orderItemId: number, name: string) {
+    const existing = myRatings[orderItemId];
+    setRateTarget({
+      productId,
+      orderItemId,
+      name,
+      rating: existing?.rating ?? 0,
+      comment: existing?.comment ?? "",
+    });
+    setRateOpen(true);
+  }
+
   if (!order && !error) {
     return (
       <div className="w-full bg-white min-h-screen">
@@ -286,23 +304,27 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const subtotal = order.items.reduce((s, i) => s + Number(i.sub_total ?? 0), 0);
   const deliveryAddr = order.address || parseAddressFromNotes(order.notes || "");
 
-  // Timeline reflects the order-level status — admin updates `orders.status`,
-  // and every step at or before that status is considered "reached".
-  // Per-item status_history (when present) supplies precise timestamps for each step.
   const isCancelled = statusKey === "cancelled";
-  // "Order Placed" and "Packed" are intentionally hidden from the timeline.
-  // When the backend status is "processed" (Packed), the truck stays at "Order Confirmed".
-  const timelineSteps = TIMELINE_STEPS.filter((s) => s.key !== "processed");
+  const isDelivered = statusKey === "delivered";
+  const canCancel = CUSTOMER_CANCELLABLE.has(statusKey);
+
+  // Timeline shown on the details page only after the order is finished
+  // (delivered or cancelled). Mid-flight orders use /orders/:id/track instead.
+  const showTimeline = isDelivered || isCancelled;
+  const TIMELINE_STEPS = [
+    { key: "received", label: "Order Confirmed" },
+    { key: "shipped", label: "Shipped" },
+    { key: "out_for_delivery", label: "Out for Delivery" },
+    { key: "delivered", label: "Delivered" },
+  ];
   const effectiveStatus = statusKey === "processed" ? "received" : statusKey;
-  const currentIdx = timelineSteps.findIndex((s) => s.key === effectiveStatus);
+  const currentIdx = TIMELINE_STEPS.findIndex((s) => s.key === effectiveStatus);
   const reachedIdx = currentIdx >= 0 ? currentIdx : 0;
   const history: StatusEntry[] = order.items[0]?.status_history || [];
   const timestampOf = (key: string): string | null => {
     const hit = history.find((h) => (h.name || "").toLowerCase() === key);
     return hit?.at || null;
   };
-
-  const canCancel = CUSTOMER_CANCELLABLE.has(statusKey);
   const tracking = order.tracking || [];
 
   // Estimated delivery — for non-delivered orders, show "expected by" placed +14 days.
@@ -360,8 +382,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         )}
       </div>
 
-      {/* Status timeline (horizontal) */}
-      {isCancelled ? (
+      {/* Finished-order banner / timeline. Live tracking lives on /orders/:id/track. */}
+      {isCancelled && (
         <div className="mb-6 rounded-[12px] border border-red-200 bg-red-50 p-5 flex items-center gap-3">
           <div className="text-[28px]">⊘</div>
           <div>
@@ -369,11 +391,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             <p className="text-[12px] text-red-700 mt-0.5">This order is no longer active.</p>
           </div>
         </div>
-      ) : (
+      )}
+      {showTimeline && !isCancelled && (
         <div className="mb-8 border-t border-[#e7e7e7] py-6">
-          {/* Step labels — above the rail */}
           <div className="flex justify-between mb-2">
-            {timelineSteps.map((step, idx) => {
+            {TIMELINE_STEPS.map((step, idx) => {
               const reached = idx <= reachedIdx;
               return (
                 <div
@@ -385,58 +407,47 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               );
             })}
           </div>
-          {/* Rail with truck centered on the line */}
           <div className="relative h-[64px]">
-            {/* Background rail — clipped from first step's center to last step's center */}
             <div
               className="absolute top-1/2 -translate-y-1/2 h-[3px] bg-[#D0D5DD]"
               style={{
-                left: `${(0.5 / timelineSteps.length) * 100}%`,
-                right: `${(0.5 / timelineSteps.length) * 100}%`,
+                left: `${(0.5 / TIMELINE_STEPS.length) * 100}%`,
+                right: `${(0.5 / TIMELINE_STEPS.length) * 100}%`,
               }}
             />
-            {/* Progress fill — starts at first step's center, ends under the truck */}
             <div
               className="absolute top-1/2 -translate-y-1/2 h-[3px] bg-[#F17A20]"
               style={{
-                left: `${(0.5 / timelineSteps.length) * 100}%`,
-                width: `${(reachedIdx / timelineSteps.length) * 100}%`,
+                left: `${(0.5 / TIMELINE_STEPS.length) * 100}%`,
+                width: `${(reachedIdx / TIMELINE_STEPS.length) * 100}%`,
               }}
             />
-            {/* Markers — orange dot for reached steps (except the truck's),
-                white/gray dot for steps yet to be reached. */}
-            {timelineSteps.map((step, idx) => {
-              if (idx === reachedIdx) return null; // truck sits here
+            {TIMELINE_STEPS.map((step, idx) => {
+              if (idx === reachedIdx) return null;
               const reached = idx < reachedIdx;
               return (
                 <div
                   key={`marker-${step.key}`}
                   className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full ${reached ? "bg-[#F17A20]" : "bg-white border-2 border-[#D0D5DD]"}`}
-                  style={{ left: `${((idx + 0.5) / timelineSteps.length) * 100}%` }}
+                  style={{ left: `${((idx + 0.5) / TIMELINE_STEPS.length) * 100}%` }}
                 />
               );
             })}
-            {/* Delivery truck at the latest reached step, centered on the rail */}
             <div
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-              style={{ left: `${((reachedIdx + 0.5) / timelineSteps.length) * 100}%` }}
+              style={{ left: `${((reachedIdx + 0.5) / TIMELINE_STEPS.length) * 100}%` }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/figma/delivery_car.png" alt="" className="h-[64px] w-auto block" />
             </div>
           </div>
-          {/* Dates — below the rail */}
           <div className="flex justify-between mt-2">
-            {timelineSteps.map((step, idx) => {
-              // Use the recorded timestamp when available. For older orders that
-              // were status-bumped without per-item history entries, fall back to
-              // the order's creation date so reached steps still show *a* date
-              // rather than a blank slot.
+            {TIMELINE_STEPS.map((step, idx) => {
               const reached = idx <= reachedIdx;
               const ts = timestampOf(step.key) ?? (reached ? order.date_added : null);
               return (
                 <div key={step.key} className="w-0 flex-1 text-center text-[11px] text-[#878787]">
-                  {ts ? formatDate(ts).split(",")[0] : (idx === timelineSteps.length - 1 ? `Expected by, ${fmtShortDate(estimatedDelivery)}` : "")}
+                  {ts ? formatDate(ts).split(",")[0] : ""}
                 </div>
               );
             })}
@@ -469,9 +480,27 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 </div>
               )}
             </div>
-            <div className="text-right shrink-0">
-              <div className="text-[15px] font-bold text-ink">{fmt(it.sub_total)}</div>
-              <div className="text-[12px] text-[#878787]">Qty: {it.quantity}</div>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="text-right">
+                <div className="text-[15px] font-bold text-ink">{fmt(it.sub_total)}</div>
+                <div className="text-[12px] text-[#878787]">Qty: {it.quantity}</div>
+              </div>
+              {isDelivered && it.product_id && (() => {
+                const mine = myRatings[it.id];
+                const rated = mine && mine.rating > 0;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => openRateModal(it.product_id as number, it.id, it.product_name)}
+                    className={`inline-flex h-[32px] items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-semibold transition-colors ${rated ? "border border-[#e7e7e7] bg-white text-ink hover:border-ink" : "bg-[#F5A524] text-white hover:brightness-110"}`}
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2l2.4 5.4L20 8.3l-4 3.9.9 5.5L12 15.1l-4.9 2.6.9-5.5-4-3.9 5.6-.9L12 2z" />
+                    </svg>
+                    {rated ? `Rated ${mine?.rating} · Edit` : "Rate this product"}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         ))}
@@ -611,6 +640,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
       </div>
+
+      <RateProductModal
+        open={rateOpen}
+        productId={rateTarget?.productId ?? null}
+        orderItemId={rateTarget?.orderItemId ?? null}
+        productName={rateTarget?.name}
+        initialRating={rateTarget?.rating ?? 0}
+        initialComment={rateTarget?.comment ?? ""}
+        onClose={() => setRateOpen(false)}
+        onSaved={(rating, comment) => {
+          if (rateTarget) {
+            setMyRatings((prev) => ({ ...prev, [rateTarget.orderItemId]: { rating, comment } }));
+          }
+        }}
+      />
     </div>
   );
 }

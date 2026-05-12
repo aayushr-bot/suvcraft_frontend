@@ -389,25 +389,48 @@ export default function OrdersPage() {
                           )}
                         </div>
 
+                        {/* Action buttons:
+                            - In-progress (awaiting → out_for_delivery): Track Order + Order Details
+                            - Delivered / Cancelled: Order Details + Buy Again
+                            Tracking is hidden on finished orders since there's no progress left to show. */}
                         <div className="flex items-center gap-2.5">
-                          <Link
-                            href={`/orders/${o.id}`}
-                            className="inline-flex h-[40px] w-[180px] items-center justify-center gap-1.5 rounded-[10px] border border-ink px-4 text-[12px] font-bold uppercase tracking-wide text-ink hover:bg-ink hover:text-white transition-colors"
-                          >
-                            Track Order
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
-                              <circle cx="12" cy="10" r="3" />
-                            </svg>
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => buyAgain(o.id)}
-                            disabled={reorderingId === o.id}
-                            className="inline-flex h-[40px] w-[180px] items-center justify-center rounded-[10px] bg-ink-soft px-4 text-[12px] font-bold uppercase tracking-wide text-white hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            {reorderingId === o.id ? "Adding…" : "Buy Again"}
-                          </button>
+                          {statusKey === "delivered" || statusKey === "cancelled" ? (
+                            <>
+                              <Link
+                                href={`/orders/${o.id}`}
+                                className="inline-flex h-[40px] w-[180px] items-center justify-center rounded-[10px] border border-ink px-4 text-[12px] font-bold uppercase tracking-wide text-ink hover:bg-ink hover:text-white transition-colors"
+                              >
+                                Order Details
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => buyAgain(o.id)}
+                                disabled={reorderingId === o.id}
+                                className="inline-flex h-[40px] w-[180px] items-center justify-center rounded-[10px] bg-ink-soft px-4 text-[12px] font-bold uppercase tracking-wide text-white hover:bg-black disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                {reorderingId === o.id ? "Adding…" : "Buy Again"}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <Link
+                                href={`/orders/${o.id}/track`}
+                                className="inline-flex h-[40px] w-[180px] items-center justify-center gap-1.5 rounded-[10px] border border-ink px-4 text-[12px] font-bold uppercase tracking-wide text-ink hover:bg-ink hover:text-white transition-colors"
+                              >
+                                Track Order
+                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                                  <circle cx="12" cy="10" r="3" />
+                                </svg>
+                              </Link>
+                              <Link
+                                href={`/orders/${o.id}`}
+                                className="inline-flex h-[40px] w-[180px] items-center justify-center rounded-[10px] bg-ink-soft px-4 text-[12px] font-bold uppercase tracking-wide text-white hover:bg-black"
+                              >
+                                Order Details
+                              </Link>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
