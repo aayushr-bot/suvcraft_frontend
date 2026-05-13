@@ -120,44 +120,63 @@ function PromoCard({
     : variant === "amber"
       ? "linear-gradient(135deg, #9B660C 0%, #C58515 100%)"
       : "linear-gradient(135deg, #1c1c1c 0%, #3a3a3a 100%)";
-  return (
-    <section className="mx-auto w-full max-w-[1440px] px-4 pt-8 md:px-8 md:pt-12">
-      <Link
-        href={href}
-        className="relative block overflow-hidden rounded-[18px] p-6 md:p-10 text-white hover:brightness-110 transition-all"
-        style={{ background: bg }}
+  const safeHref = href || "/products";
+  const inner = (
+    <>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-4 -bottom-6 select-none font-bold leading-none tracking-[-0.06em] text-white/[0.06]"
+        style={{ fontSize: "clamp(140px, 22vw, 240px)" }}
       >
-        {/* Decorative oversize number */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -right-4 -bottom-6 select-none font-bold leading-none tracking-[-0.06em] text-white/[0.06]"
-          style={{ fontSize: "clamp(140px, 22vw, 240px)" }}
-        >
-          %
-        </span>
-        <div className="relative flex flex-col gap-3 max-w-[480px]">
+        %
+      </span>
+      <div className="relative flex flex-col gap-3 max-w-[480px]">
+        {eyebrow && (
           <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
             <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
             {eyebrow}
           </span>
-          <h3 className="font-sans text-[26px] md:text-[36px] font-bold leading-[1.05] tracking-tight">
-            {title}
-          </h3>
+        )}
+        <h3 className="font-sans text-[26px] md:text-[36px] font-bold leading-[1.05] tracking-tight">
+          {title}
+        </h3>
+        {subtitle && (
           <p className="text-[13px] md:text-[14px] text-white/75 leading-[1.6]">{subtitle}</p>
+        )}
+        {cta && (
           <span className="mt-2 inline-flex h-[44px] w-fit items-center justify-center gap-2 rounded-full bg-white px-6 text-[12px] font-bold uppercase tracking-[0.12em] text-ink">
             {cta}
             <ChevronRight className="h-3.5 w-3.5" />
           </span>
+        )}
+      </div>
+    </>
+  );
+  return (
+    <section className="mx-auto w-full max-w-[1440px] px-4 pt-8 md:px-8 md:pt-12">
+      {cta ? (
+        <Link
+          href={safeHref}
+          className="relative block overflow-hidden rounded-[18px] p-6 md:p-10 text-white hover:brightness-110 transition-all"
+          style={{ background: bg }}
+        >
+          {inner}
+        </Link>
+      ) : (
+        <div
+          className="relative block overflow-hidden rounded-[18px] p-6 md:p-10 text-white"
+          style={{ background: bg }}
+        >
+          {inner}
         </div>
-      </Link>
+      )}
     </section>
   );
 }
 
-// Read a settings key, fall back to a default when blank/undefined.
-function cfg(settings: SiteSettings, key: keyof SiteSettings, fallback: string) {
-  const v = String(settings[key] ?? "").trim();
-  return v || fallback;
+// Read a settings string, trimmed. Empty when unset.
+function cfg(settings: SiteSettings, key: keyof SiteSettings) {
+  return String(settings[key] ?? "").trim();
 }
 
 // Parse a comma-separated list of product IDs from a settings value.
@@ -187,51 +206,44 @@ function parseSource(raw: unknown): { mode: "none" | "popular" | "discount" | "r
   return { mode: "none", threshold: 0 };
 }
 
-// Resolve a product section. Priority order:
-//   1. `source` setting — admin's chosen rule (popular / rating / discount).
-//   2. Legacy `min_discount` setting (kept for backward compat).
-//   3. Manual product IDs from the multi-select picker.
-//   4. Fallback slice so the section is never empty.
+// Resolve a product section purely from admin config. Returns [] when nothing
+// is configured — the section simply won't render. No hardcoded fallback.
+//
+// Priority: source rule (popular / rating / discount) > legacy min_discount > manual picker.
 async function resolveSection(
   idsRaw: unknown,
   sourceRaw: unknown,
   minDiscountLegacy: unknown,
   catalog: Product[],
   popular: Product[],
-  fallback: Product[],
 ): Promise<Product[]> {
   const src = parseSource(sourceRaw);
 
   if (src.mode === "popular") {
-    const list = popular.length ? popular : catalog;
-    return list.slice(0, 10).length ? list.slice(0, 10) : fallback;
+    return (popular.length ? popular : catalog).slice(0, 10);
   }
   if (src.mode === "discount" && src.threshold > 0) {
-    const filtered = catalog.filter((p) => discountPct(p) >= src.threshold).slice(0, 10);
-    return filtered.length ? filtered : fallback;
+    return catalog.filter((p) => discountPct(p) >= src.threshold).slice(0, 10);
   }
   if (src.mode === "rating" && src.threshold > 0) {
-    const filtered = catalog
+    return catalog
       .filter((p) => Number(p.rating || 0) >= src.threshold)
       .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0))
       .slice(0, 10);
-    return filtered.length ? filtered : fallback;
   }
 
-  // Legacy fallback — older config saved a discount tier here before the
-  // unified `source` field existed.
+  // Legacy: previous version stored only a discount tier here.
   const minDiscount = Number(minDiscountLegacy) || 0;
   if (minDiscount > 0) {
-    const filtered = catalog.filter((p) => discountPct(p) >= minDiscount).slice(0, 10);
-    return filtered.length ? filtered : fallback;
+    return catalog.filter((p) => discountPct(p) >= minDiscount).slice(0, 10);
   }
 
   // Manual product picker
   const ids = parseIds(idsRaw);
-  if (ids.length === 0) return fallback;
+  if (ids.length === 0) return [];
   const csv = ids.join(",");
   const res = await api.products({ ids: csv }).catch(() => ({ rows: [] as Product[] }));
-  return res.rows?.length ? res.rows : fallback;
+  return res.rows ?? [];
 }
 
 export default async function FeatureWorkPage() {
@@ -247,102 +259,91 @@ export default async function FeatureWorkPage() {
   const all = productsRes.rows ?? [];
   const popular = popularRes.rows ?? [];
 
-  // Resolve the four product sections — source rule > legacy discount > manual picker > auto-pick.
   const [section1, section2, section3, section4] = await Promise.all([
-    resolveSection(settings.feature_section1_product_ids, settings.feature_section1_source, settings.feature_section1_min_discount, all, popular, popular.length ? popular.slice(0, 10) : all.slice(0, 10)),
-    resolveSection(settings.feature_section2_product_ids, settings.feature_section2_source, settings.feature_section2_min_discount, all, popular, all.slice(0, 10)),
-    resolveSection(settings.feature_section3_product_ids, settings.feature_section3_source, settings.feature_section3_min_discount, all, popular, all.slice(10, 20).length ? all.slice(10, 20) : all.slice(0, 10)),
-    resolveSection(settings.feature_section4_product_ids, settings.feature_section4_source, settings.feature_section4_min_discount, all, popular, all.slice(5, 15).length ? all.slice(5, 15) : all.slice(0, 10)),
+    resolveSection(settings.feature_section1_product_ids, settings.feature_section1_source, settings.feature_section1_min_discount, all, popular),
+    resolveSection(settings.feature_section2_product_ids, settings.feature_section2_source, settings.feature_section2_min_discount, all, popular),
+    resolveSection(settings.feature_section3_product_ids, settings.feature_section3_source, settings.feature_section3_min_discount, all, popular),
+    resolveSection(settings.feature_section4_product_ids, settings.feature_section4_source, settings.feature_section4_min_discount, all, popular),
   ]);
+
+  // Pre-read all admin copy. Empty strings mean "skip this block".
+  const heroTitle = cfg(settings, "feature_title");
+  const heroDesc = cfg(settings, "feature_description");
+  const heroCtaText = cfg(settings, "feature_cta_text");
+  const heroCtaLink = cfg(settings, "feature_cta_link");
+
+  const promos = [1, 2, 3].map((n) => ({
+    eyebrow: cfg(settings, `feature_promo${n}_eyebrow` as keyof SiteSettings),
+    title: cfg(settings, `feature_promo${n}_title` as keyof SiteSettings),
+    subtitle: cfg(settings, `feature_promo${n}_subtitle` as keyof SiteSettings),
+    cta: cfg(settings, `feature_promo${n}_cta_text` as keyof SiteSettings),
+    href: cfg(settings, `feature_promo${n}_cta_link` as keyof SiteSettings),
+    variant: (n === 1 ? "purple" : n === 2 ? "amber" : "dark") as "purple" | "amber" | "dark",
+  }));
+
+  const sections = [
+    { items: section1, title: cfg(settings, "feature_section1_title"), subtitle: cfg(settings, "feature_section1_subtitle") },
+    { items: section2, title: cfg(settings, "feature_section2_title"), subtitle: cfg(settings, "feature_section2_subtitle") },
+    { items: section3, title: cfg(settings, "feature_section3_title"), subtitle: cfg(settings, "feature_section3_subtitle") },
+    { items: section4, title: cfg(settings, "feature_section4_title"), subtitle: cfg(settings, "feature_section4_subtitle") },
+  ];
+
+  // Render order: promo1, section1, promo2, section2, section3, promo3, section4.
+  // Each block only renders when admin has populated it.
+  const blocks: React.ReactNode[] = [];
+  if (promos[0].title) blocks.push(<PromoCard key="p1" {...promos[0]} />);
+  if (sections[0].title && sections[0].items.length) blocks.push(<SectionRow key="s1" title={sections[0].title} subtitle={sections[0].subtitle} items={sections[0].items} />);
+  if (promos[1].title) blocks.push(<PromoCard key="p2" {...promos[1]} />);
+  if (sections[1].title && sections[1].items.length) blocks.push(<SectionRow key="s2" title={sections[1].title} subtitle={sections[1].subtitle} items={sections[1].items} />);
+  if (sections[2].title && sections[2].items.length) blocks.push(<SectionRow key="s3" title={sections[2].title} subtitle={sections[2].subtitle} items={sections[2].items} />);
+  if (promos[2].title) blocks.push(<PromoCard key="p3" {...promos[2]} />);
+  if (sections[3].title && sections[3].items.length) blocks.push(<SectionRow key="s4" title={sections[3].title} subtitle={sections[3].subtitle} items={sections[3].items} />);
+
+  const showHero = heroTitle || heroDesc || heroCtaText;
 
   return (
     <div
       className="min-h-screen pb-16"
       style={{ background: "linear-gradient(179.62deg, #FFF6DE 0.33%, #FFFFFF 12.73%)" }}
     >
-      {/* Page header */}
       <section className="mx-auto w-full max-w-[1440px] px-4 pt-6 pb-2 md:px-8 md:pt-10">
         <nav className="text-[12px] text-[#8c8c8c] mb-4">
           <Link href="/" className="hover:text-ink">Home</Link>
           <span className="mx-1.5">›</span>
           <span className="text-ink">Feature Work</span>
         </nav>
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-6">
-          <div className="max-w-[620px]">
-            <h1 className="font-sans text-[26px] md:text-[40px] font-bold text-ink leading-[1.05] tracking-tight">
-              {cfg(settings, "feature_title", "Discover what's new in store")}
-            </h1>
-            <p className="mt-2 text-[13px] md:text-[14px] text-[#525151] leading-[1.6]">
-              {cfg(settings, "feature_description", "Hand-picked drops, trending favourites and limited-time offers — refreshed every week.")}
-            </p>
+        {showHero && (
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-6">
+            <div className="max-w-[620px]">
+              {heroTitle && (
+                <h1 className="font-sans text-[26px] md:text-[40px] font-bold text-ink leading-[1.05] tracking-tight">
+                  {heroTitle}
+                </h1>
+              )}
+              {heroDesc && (
+                <p className="mt-2 text-[13px] md:text-[14px] text-[#525151] leading-[1.6]">{heroDesc}</p>
+              )}
+            </div>
+            {heroCtaText && (
+              <Link
+                href={heroCtaLink || "/products"}
+                className="inline-flex h-[44px] w-fit items-center justify-center gap-2 rounded-full bg-ink px-6 text-[12px] font-bold uppercase tracking-[0.12em] text-white hover:bg-black"
+              >
+                {heroCtaText}
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
           </div>
-          <Link
-            href={cfg(settings, "feature_cta_link", "/products")}
-            className="inline-flex h-[44px] w-fit items-center justify-center gap-2 rounded-full bg-ink px-6 text-[12px] font-bold uppercase tracking-[0.12em] text-white hover:bg-black"
-          >
-            {cfg(settings, "feature_cta_text", "Shop all")}
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
+        )}
       </section>
 
-      {/* Hero promo card */}
-      <PromoCard
-        eyebrow={cfg(settings, "feature_promo1_eyebrow", "Editor's pick")}
-        title={cfg(settings, "feature_promo1_title", "Premium picks, picked just for you.")}
-        subtitle={cfg(settings, "feature_promo1_subtitle", "Curated by our buyers. Free shipping on orders above ₹1,500 and a no-questions return window.")}
-        cta={cfg(settings, "feature_promo1_cta_text", "Browse the edit")}
-        href={cfg(settings, "feature_promo1_cta_link", "/products")}
-        variant="purple"
-      />
+      {blocks}
 
-      {/* Section 1 */}
-      <SectionRow
-        title={cfg(settings, "feature_section1_title", "Store Favorites")}
-        subtitle={cfg(settings, "feature_section1_subtitle", "Most-loved by our customers this month.")}
-        items={section1}
-      />
-
-      {/* Promo card 2 */}
-      <PromoCard
-        eyebrow={cfg(settings, "feature_promo2_eyebrow", "Limited offer")}
-        title={cfg(settings, "feature_promo2_title", "Up to 30% off bestsellers.")}
-        subtitle={cfg(settings, "feature_promo2_subtitle", "Stack a coupon at checkout for an extra ₹100 off your first order over ₹999.")}
-        cta={cfg(settings, "feature_promo2_cta_text", "Grab the deal")}
-        href={cfg(settings, "feature_promo2_cta_link", "/products")}
-        variant="amber"
-      />
-
-      {/* Section 2 */}
-      <SectionRow
-        title={cfg(settings, "feature_section2_title", "Trending This Week")}
-        subtitle={cfg(settings, "feature_section2_subtitle", "What everyone's buying right now.")}
-        items={section2}
-      />
-
-      {/* Section 3 */}
-      <SectionRow
-        title={cfg(settings, "feature_section3_title", "New Arrivals")}
-        subtitle={cfg(settings, "feature_section3_subtitle", "Fresh drops, straight from the studio.")}
-        items={section3}
-      />
-
-      {/* Promo card 3 */}
-      <PromoCard
-        eyebrow={cfg(settings, "feature_promo3_eyebrow", "Member perks")}
-        title={cfg(settings, "feature_promo3_title", "Sign in. Save more.")}
-        subtitle={cfg(settings, "feature_promo3_subtitle", "Your wallet balance, saved addresses, and exclusive member-only prices all in one place.")}
-        cta={cfg(settings, "feature_promo3_cta_text", "Go to my account")}
-        href={cfg(settings, "feature_promo3_cta_link", "/profile")}
-        variant="dark"
-      />
-
-      {/* Section 4 */}
-      <SectionRow
-        title={cfg(settings, "feature_section4_title", "Best Sellers")}
-        subtitle={cfg(settings, "feature_section4_subtitle", "Proven favorites, restocked weekly.")}
-        items={section4}
-      />
+      {blocks.length === 0 && !showHero && (
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-20 md:px-8 text-center text-[14px] text-[#8c8c8c]">
+          This page hasn&apos;t been configured yet. Set it up in admin &rarr; Web Settings &rarr; Feature Work Page.
+        </div>
+      )}
     </div>
   );
 }
