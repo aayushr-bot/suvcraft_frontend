@@ -170,6 +170,46 @@ export type SiteSettings = {
   products_description?: string;
   // Payment methods — only the storefront-safe flag for wallet is exposed; gateway secrets stay private.
   wallet_method?: number | string;
+  // Feature Work page — admin-controlled layout
+  feature_title?: string;
+  feature_description?: string;
+  feature_cta_text?: string;
+  feature_cta_link?: string;
+  feature_promo1_eyebrow?: string;
+  feature_promo1_title?: string;
+  feature_promo1_subtitle?: string;
+  feature_promo1_cta_text?: string;
+  feature_promo1_cta_link?: string;
+  feature_promo2_eyebrow?: string;
+  feature_promo2_title?: string;
+  feature_promo2_subtitle?: string;
+  feature_promo2_cta_text?: string;
+  feature_promo2_cta_link?: string;
+  feature_promo3_eyebrow?: string;
+  feature_promo3_title?: string;
+  feature_promo3_subtitle?: string;
+  feature_promo3_cta_text?: string;
+  feature_promo3_cta_link?: string;
+  feature_section1_title?: string;
+  feature_section1_subtitle?: string;
+  feature_section1_product_ids?: string;
+  feature_section1_min_discount?: string | number;
+  feature_section1_source?: string;
+  feature_section2_title?: string;
+  feature_section2_subtitle?: string;
+  feature_section2_product_ids?: string;
+  feature_section2_min_discount?: string | number;
+  feature_section2_source?: string;
+  feature_section3_title?: string;
+  feature_section3_subtitle?: string;
+  feature_section3_product_ids?: string;
+  feature_section3_min_discount?: string | number;
+  feature_section3_source?: string;
+  feature_section4_title?: string;
+  feature_section4_subtitle?: string;
+  feature_section4_product_ids?: string;
+  feature_section4_min_discount?: string | number;
+  feature_section4_source?: string;
   logo?: string;
   app_name?: string;
   // Top-Selling section

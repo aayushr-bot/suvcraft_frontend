@@ -88,9 +88,9 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   // The trailing slash matters — without it this also matched /products (the
   // catalog page), giving the listing a mismatched white nav over a cream body.
   const isProductPage = pathname.startsWith("/product/");
-  // Catalog page uses a cream gradient body — give the nav the same starting
-  // tint so the gradient appears to begin at the top of the page.
-  const isProductsCatalog = pathname === "/products";
+  // Pages with the cream-gradient body — give the nav the same starting tint
+  // so the gradient appears to begin at the top of the page.
+  const isProductsCatalog = pathname === "/products" || pathname === "/feature-work";
   // Pages that override the body background to white. Search bar uses a soft
   // grey here so it stays visible against the white surroundings.
   const isWhiteBody = isProductPage
