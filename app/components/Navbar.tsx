@@ -104,8 +104,12 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [location, setLocation] = useState<{ city: string; pincode: string } | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<{ id: number; city?: string; pincode?: string; type?: string; is_default?: number }[]>([]);
+  const locationRef = useRef<HTMLDivElement | null>(null);
   const { count: cartCount } = useCart();
   const { count: wishlistCount } = useWishlist();
   const settingsRef = useRef<HTMLDivElement | null>(null);
@@ -183,6 +187,47 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
       .catch(() => {});
   }, []);
 
+  // Resolve the user's "current location" — used by the location button next
+  // to the logo. Logged-in users see their default saved address's city +
+  // pincode; guests get a placeholder. Refetches when auth state changes so a
+  // freshly-signed-in user sees their address immediately.
+  useEffect(() => {
+    let cancelled = false;
+    function loadAddresses() {
+      fetch(`${API}/api/v1/addresses`, { credentials: "include", cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (cancelled) return;
+          const rows = Array.isArray(j?.data?.rows) ? j.data.rows : [];
+          setSavedAddresses(rows);
+          const def = rows.find((a: { is_default?: number }) => Number(a.is_default) === 1) || rows[0];
+          if (def) {
+            setLocation({
+              city: String(def.city || "").trim(),
+              pincode: String(def.pincode || "").trim(),
+            });
+          } else {
+            setLocation(null);
+          }
+        })
+        .catch(() => { if (!cancelled) setLocation(null); });
+    }
+    loadAddresses();
+    const handler = () => loadAddresses();
+    window.addEventListener("auth:changed", handler);
+    return () => { cancelled = true; window.removeEventListener("auth:changed", handler); };
+  }, []);
+
+  // Close the location dropdown when clicking outside.
+  useEffect(() => {
+    if (!isLocationOpen) return;
+    function onClick(e: MouseEvent) {
+      if (!locationRef.current?.contains(e.target as Node)) setIsLocationOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [isLocationOpen]);
+
   function handleLogout() {
     fetch(`${API}/api/v1/auth/logout`, { method: "POST", credentials: "include" })
       .finally(() => {
@@ -242,8 +287,8 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
       style={isProductsCatalog ? { background: "#FFF6DE" } : undefined}
     >
       <div className="mx-auto w-full max-w-[1440px] px-4 pt-4 pb-3 md:px-8 md:pt-6">
-        <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
+        <div className="flex items-center gap-3 md:gap-5">
+          <Link href="/" className="flex items-center gap-3 shrink-0">
             {headerLogo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={headerLogo} alt={brand} className="h-[42px] w-auto md:h-[52px]" />
@@ -254,7 +299,97 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
             )}
           </Link>
 
-          <div className="flex items-center gap-2 md:gap-3">
+          {/* Location selector — pulls from the user's default saved address.
+              Opens a small dropdown so they can switch between saved addresses
+              or jump to /addresses to add a new one. */}
+          <div ref={locationRef} className="relative hidden md:flex shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (!user) { setIsSignInOpen(true); return; }
+                setIsLocationOpen((v) => !v);
+              }}
+              className="flex items-center gap-2 rounded-[12px] px-2.5 py-1.5 text-left hover:bg-black/5"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/5 text-ink-soft">
+                <MapPinIcon className="h-4.5 w-4.5" />
+              </span>
+              <span className="flex flex-col leading-tight">
+                <span className="text-[11px] text-[#8c8c8c]">Current Location</span>
+                <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-ink">
+                  {location?.city || location?.pincode ? (
+                    <>
+                      {location?.city || "—"}
+                      {location?.pincode ? `, ${location.pincode}` : ""}
+                    </>
+                  ) : (
+                    "Set location"
+                  )}
+                  <svg className="h-3 w-3 text-ink-soft" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </span>
+              </span>
+            </button>
+            {isLocationOpen && (
+              <div className="absolute left-0 top-full mt-2 z-50 w-[260px] rounded-[10px] border border-[#e7e7e7] bg-white py-1 shadow-lg">
+                {savedAddresses.length === 0 ? (
+                  <p className="px-4 py-3 text-[12.5px] text-[#525151]">
+                    No saved addresses yet. Add one to set your delivery location.
+                  </p>
+                ) : (
+                  savedAddresses.slice(0, 5).map((a) => {
+                    const active = location?.pincode === a.pincode && location?.city === a.city;
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => {
+                          setLocation({ city: String(a.city || ""), pincode: String(a.pincode || "") });
+                          setIsLocationOpen(false);
+                        }}
+                        className={`flex w-full items-start gap-2 px-4 py-2 text-left text-[12.5px] hover:bg-[#f6f6f6] ${active ? "bg-[#fafafa]" : ""}`}
+                      >
+                        <MapPinIcon className="mt-0.5 h-4 w-4 shrink-0 text-ink-soft" />
+                        <span className="flex flex-col min-w-0">
+                          <span className="font-semibold text-ink truncate">
+                            {a.type || "Saved"} · {a.city || "—"}
+                          </span>
+                          <span className="text-[#8c8c8c]">PIN {a.pincode || "—"}</span>
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+                <div className="my-1 border-t border-[#eee]" />
+                <Link
+                  href="/addresses"
+                  onClick={() => setIsLocationOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-[12.5px] font-semibold text-ink hover:bg-[#f6f6f6]"
+                >
+                  + Add new address
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Top-row search bar (desktop) — moved up from the category rail to
+              match the reference layout. Stretches to fill available space. */}
+          <label className={`hidden md:flex h-[44px] flex-1 min-w-0 items-center gap-2 rounded-[45px] px-4 shadow-sm lg:h-[48px] lg:px-5 ${isWhiteBody ? "bg-[#F7F7F7]" : "bg-white"}`}>
+            <input
+              type="search"
+              placeholder="Search Products"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              className="flex-1 bg-transparent text-[13px] text-ink placeholder:text-[#8c8c8c] focus:outline-none md:text-[14px]"
+            />
+            <button type="button" onClick={handleSearch} aria-label="Search">
+              <SearchIcon className="h-4 w-4 text-ink-soft" />
+            </button>
+          </label>
+
+          <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto md:ml-0">
             {user ? (
               (() => {
                 const dn = pickDisplayName(user);
@@ -351,19 +486,22 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
             })}
           </nav>
 
-          <label className={`ml-4 flex h-[40px] w-[280px] shrink-0 items-center gap-2 rounded-[45px] px-4 shadow-sm lg:ml-8 lg:w-[380px] lg:h-[44px] lg:px-5 ${isWhiteBody ? "bg-[#F7F7F7]" : "bg-white"}`}>
-            <input
-              type="search"
-              placeholder="Search Product"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="flex-1 bg-transparent text-[13px] text-ink placeholder:text-[#8c8c8c] focus:outline-none md:text-[14px]"
-            />
-            <button type="button" onClick={handleSearch} aria-label="Search">
-              <SearchIcon className="h-4 w-4 text-ink-soft" />
-            </button>
-          </label>
+          {/* Dedicated Wishlist icon, surfaced next to settings/cart to match
+              the reference layout (separate heart, not just inside the
+              settings dropdown). */}
+          <button
+            type="button"
+            onClick={() => { if (!user) { setIsSignInOpen(true); return; } setIsWishlistOpen(true); }}
+            aria-label="Wishlist"
+            className="relative ml-4 flex h-[38px] w-[38px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5 md:h-[44px] md:w-[44px]"
+          >
+            <HeartLine className="h-5 w-5" />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                {wishlistCount > 99 ? "99+" : wishlistCount}
+              </span>
+            )}
+          </button>
 
           <div
             ref={settingsRef}
@@ -379,11 +517,6 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5 md:h-[44px] md:w-[44px]"
             >
               <SettingsIcon className="h-5 w-5" />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
-                  {wishlistCount > 99 ? "99+" : wishlistCount}
-                </span>
-              )}
             </button>
             {isSettingsOpen && (
               <div className="absolute right-0 top-full mt-1 z-50 w-[220px] rounded-[10px] border border-[#e7e7e7] bg-white py-1 shadow-lg">
@@ -490,8 +623,28 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
           </Link>
         </div>
 
+        {/* Mobile location row — sits above the search bar, mirrors the
+            desktop "Current Location" chip but inline with the screen width. */}
+        <div className="mt-3 flex md:hidden items-center">
+          <button
+            type="button"
+            onClick={() => { if (!user) { setIsSignInOpen(true); return; } router.push("/addresses"); }}
+            className="flex items-center gap-2 rounded-[10px] px-1.5 py-1 text-left hover:bg-black/5"
+          >
+            <MapPinIcon className="h-4 w-4 text-ink-soft" />
+            <span className="flex flex-col leading-tight">
+              <span className="text-[10px] text-[#8c8c8c]">Current Location</span>
+              <span className="text-[12px] font-semibold text-ink">
+                {location?.city || location?.pincode
+                  ? `${location?.city || "—"}${location?.pincode ? `, ${location.pincode}` : ""}`
+                  : "Set location"}
+              </span>
+            </span>
+          </button>
+        </div>
+
         {/* Mobile search bar */}
-        <div className="mt-3 flex md:hidden">
+        <div className="mt-2 flex md:hidden">
           <label className={`flex h-[40px] flex-1 items-center gap-2 rounded-[45px] px-4 shadow-sm ${isWhiteBody ? "bg-[#F7F7F7]" : "bg-white"}`}>
             <input
               type="search"
@@ -505,6 +658,21 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               <SearchIcon className="h-4 w-4 text-ink-soft" />
             </button>
           </label>
+          {/* Dedicated mobile wishlist button — surfaces the heart so users
+              don't have to dig into the settings dropdown. */}
+          <button
+            type="button"
+            onClick={() => { if (!user) { setIsSignInOpen(true); return; } setIsWishlistOpen(true); }}
+            aria-label="Wishlist"
+            className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5"
+          >
+            <HeartLine className="h-5 w-5" />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
+                {wishlistCount > 99 ? "99+" : wishlistCount}
+              </span>
+            )}
+          </button>
           <div className="relative ml-2" ref={mobileSettingsRef}>
             <button
               type="button"
@@ -514,11 +682,6 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               className="relative flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5"
             >
               <SettingsIcon className="h-5 w-5" />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">
-                  {wishlistCount > 99 ? "99+" : wishlistCount}
-                </span>
-              )}
             </button>
             {isSettingsOpen && (
               <div className="absolute right-0 top-full mt-1 z-50 w-[220px] rounded-[10px] border border-[#e7e7e7] bg-white py-1 shadow-lg">

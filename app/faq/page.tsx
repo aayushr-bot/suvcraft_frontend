@@ -435,13 +435,15 @@ export default function FaqPage() {
   return (
     <div className="min-h-screen bg-[#f6f6f8]">
       {/* ─── Hero band ───────────────────────────────────────────────── */}
-      <section className="bg-ink text-white">
-        <div className="mx-auto w-full max-w-[1440px] px-4 md:px-8 py-12 sm:py-16 text-center">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-white/60">Help centre</p>
-          <h1 className="mt-2 text-[28px] sm:text-[40px] font-bold leading-tight">
+      {/* Matches the cream-toned navbar (#FFF6DE) so the page reads as one
+          continuous header section. Same max-width + padding as the navbar. */}
+      <section style={{ backgroundColor: "#FFF6DE" }}>
+        <div className="mx-auto w-full max-w-[1440px] px-4 md:px-8 py-10 sm:py-14 text-center">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-[#8c8c8c]">Help centre</p>
+          <h1 className="mt-2 text-[28px] sm:text-[40px] font-bold leading-tight text-ink">
             Frequently Asked Questions
           </h1>
-          <p className="mt-3 text-[14px] sm:text-[15px] text-white/75 max-w-[560px] mx-auto">
+          <p className="mt-3 text-[14px] sm:text-[15px] text-[#525151] max-w-[560px] mx-auto">
             Find answers to common questions about orders, delivery, returns, and your Suvcraft account.
           </p>
 
@@ -455,7 +457,7 @@ export default function FaqPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search questions…"
-                className="w-full h-[50px] rounded-[12px] bg-white pl-11 pr-4 text-[14px] text-ink placeholder:text-[#a3a3a3] focus:outline-none focus:ring-2 focus:ring-white/30"
+                className="w-full h-[50px] rounded-[12px] bg-white pl-11 pr-4 text-[14px] text-ink placeholder:text-[#a3a3a3] shadow-sm focus:outline-none focus:ring-2 focus:ring-ink/10"
               />
             </div>
           </div>
