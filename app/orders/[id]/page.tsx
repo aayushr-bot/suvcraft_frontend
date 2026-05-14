@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { imgUrl } from "@/lib/api";
 import ProductImage from "../../components/ProductImage";
 import RateProductModal from "../../components/RateProductModal";
+import ReturnRequestModal, { type ReturnableItem } from "../../components/ReturnRequestModal";
+import TrackReturnModal from "../../components/TrackReturnModal";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -24,8 +26,45 @@ type OrderItem = {
   product_image?: string;
   current_status?: string;
   status_history?: StatusEntry[];
+  is_returnable?: number;
   size?: string;
   color?: { name: string; swatch?: string };
+};
+
+type ReturnRequestRow = {
+  id: number;
+  order_item_id: number;
+  request_type: "return" | "exchange";
+  return_reason: string;
+  status: number;
+  remarks?: string;
+  date_created?: string;
+  refund_amount?: number | string;
+  refund_method?: string | null;
+  pickup_address_id?: number | null;
+  pickup_name?: string | null;
+  pickup_mobile?: string | null;
+  pickup_address?: string | null;
+  pickup_city?: string | null;
+  pickup_state?: string | null;
+  pickup_pincode?: string | null;
+  media?: { url: string; type: "image" | "video" }[];
+};
+
+const RETURN_STATUS_LABEL: Record<number, string> = {
+  0: "Pending review",
+  1: "Approved",
+  2: "Rejected",
+  3: "Picked up",
+  4: "Refunded / Exchanged",
+};
+
+const RETURN_STATUS_BADGE: Record<number, string> = {
+  0: "bg-amber-50 text-amber-700 border-amber-200",
+  1: "bg-blue-50 text-blue-700 border-blue-200",
+  2: "bg-red-50 text-red-700 border-red-200",
+  3: "bg-violet-50 text-violet-700 border-violet-200",
+  4: "bg-green-50 text-green-700 border-green-200",
 };
 
 type TrackingEntry = {
@@ -130,6 +169,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [myRatings, setMyRatings] = useState<Record<number, { rating: number; comment: string } | null>>({});
   const [rateOpen, setRateOpen] = useState(false);
   const [rateTarget, setRateTarget] = useState<{ productId: number; orderItemId: number; name: string; rating: number; comment: string } | null>(null);
+  // Return / exchange state — fetched once per order, indexed by order_item_id.
+  const [returnRequests, setReturnRequests] = useState<Record<number, ReturnRequestRow>>({});
+  const [returnWindowDays, setReturnWindowDays] = useState<number>(7);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [trackOpen, setTrackOpen] = useState(false);
+  const [trackTarget, setTrackTarget] = useState<{ request: ReturnRequestRow; name: string } | null>(null);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -255,11 +300,52 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       .catch(() => setError("Network error. Please try again."));
   }, [id, router]);
 
-  // We intentionally don't pre-fetch existing ratings here. Seed data and
-  // pre-existing reviews for the product would otherwise label every line item
-  // as "Rated" even when the buyer hasn't rated this specific delivery yet.
-  // The button only flips to "Rated X · Edit" after the buyer submits via the
-  // modal in this session — which is exactly what `myRatings` tracks.
+  // Once the order loads and is delivered, pull existing return/exchange
+  // requests so the UI shows "Requested · pending" instead of the button.
+  useEffect(() => {
+    if (!order) return;
+    if ((order.status || "").toLowerCase() !== "delivered") return;
+    fetch(`${API}/api/v1/orders/${order.id}/returns`, { credentials: "include", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const rows: ReturnRequestRow[] = Array.isArray(j?.data?.rows) ? j.data.rows : [];
+        const map: Record<number, ReturnRequestRow> = {};
+        for (const r of rows) map[r.order_item_id] = r;
+        setReturnRequests(map);
+      })
+      .catch(() => {});
+  }, [order?.id, order?.status]);
+
+  // Pull the admin-configured return window (defaults to 7 days).
+  useEffect(() => {
+    fetch(`${API}/api/v1/settings`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const n = Number(j?.data?.return_window_days);
+        if (Number.isFinite(n) && n > 0) setReturnWindowDays(Math.floor(n));
+      })
+      .catch(() => {});
+  }, []);
+
+  // Pre-fetch the buyer's per-line ratings for this order so a previously-rated
+  // item still shows the "Rated X" badge after a page refresh. The endpoint
+  // joins `product_rating.order_item_id` with this order's items — seed/legacy
+  // ratings made outside this order won't show up here.
+  useEffect(() => {
+    if (!order) return;
+    if ((order.status || "").toLowerCase() !== "delivered") return;
+    fetch(`${API}/api/v1/orders/${order.id}/ratings`, { credentials: "include", cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const rows: Array<{ order_item_id: number; rating: number; comment?: string }> = Array.isArray(j?.data?.rows) ? j.data.rows : [];
+        const map: Record<number, { rating: number; comment: string } | null> = {};
+        for (const r of rows) {
+          map[r.order_item_id] = { rating: Number(r.rating || 0), comment: String(r.comment || "") };
+        }
+        setMyRatings((prev) => ({ ...prev, ...map }));
+      })
+      .catch(() => {});
+  }, [order?.id, order?.status]);
 
   function openRateModal(productId: number, orderItemId: number, name: string) {
     const existing = myRatings[orderItemId];
@@ -455,55 +541,193 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
+      {/* Eligible items for a return/exchange — delivered, marked returnable,
+          within the admin window, and not already in an open request. */}
+      {(() => {
+        const deliveredTs = timestampOf("delivered") ?? (isDelivered ? order.date_added : null);
+        const deadline = deliveredTs
+          ? new Date(new Date(deliveredTs).getTime() + returnWindowDays * 86400000)
+          : null;
+        const withinWindow = deadline ? Date.now() <= deadline.getTime() : false;
+        // Everything in a delivered order is eligible for exchange as long as
+        // there's no request open yet. The is_returnable flag only blocks the
+        // refund path (handled inside the modal).
+        const eligible: ReturnableItem[] = isDelivered && withinWindow
+          ? order.items
+              .filter((it) => !returnRequests[it.id])
+              .map((it) => ({
+                id: it.id,
+                product_name: it.product_name,
+                product_image: resolveImg(it.product_image),
+                size: it.size,
+                color: it.color,
+                quantity: it.quantity,
+                sub_total: it.sub_total,
+                refund_allowed: it.is_returnable == null ? true : Number(it.is_returnable) === 1,
+              }))
+          : [];
+        if (!eligible.length) return null;
+        return (
+          <div className="mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-[12px] border border-[#e7e7e7] bg-[#fafafa] px-4 py-3">
+            <div className="text-[13px] text-[#525151]">
+              Return or exchange any item before{" "}
+              <span className="font-semibold text-ink">
+                {deadline?.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+              </span>.
+            </div>
+            <button
+              type="button"
+              onClick={() => setReturnOpen(true)}
+              className="inline-flex h-[40px] w-fit items-center justify-center gap-1.5 rounded-[10px] border border-ink bg-white px-5 text-[12px] font-bold uppercase tracking-wide text-ink hover:bg-ink hover:text-white transition-colors"
+            >
+              Return / Exchange
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Items list */}
       <div className="flex flex-col">
-        {order.items.map((it, idx) => (
-          <div
-            key={it.id}
-            className={`flex items-center gap-4 py-5 ${idx === 0 ? "" : "border-t border-[#eee]"}`}
-          >
-            <div className="h-[64px] w-[64px] shrink-0 rounded-[8px] bg-[#f6f6f8] overflow-hidden flex items-center justify-center">
-              <ProductImage src={resolveImg(it.product_image)} alt={it.product_name} className="h-full w-full object-contain p-1" />
-            </div>
-            <div className="flex flex-1 min-w-0 flex-col gap-1">
-              <h4 className="text-[15px] font-semibold text-ink line-clamp-1">{it.product_name}</h4>
-              {(it.size || it.color) && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#878787]">
-                  {it.color && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="inline-block h-3 w-3 rounded-full ring-1 ring-black/10" style={{ backgroundColor: it.color.swatch || "#e7e7e7" }} />
-                      {it.color.name}
-                    </span>
-                  )}
-                  {it.color && it.size && <span className="text-[#cfcfcf]">|</span>}
-                  {it.size && <span>{it.size}</span>}
+        {order.items.map((it, idx) => {
+          // Per-item return state — used only to show the deadline/status text
+          // under each line (the action button itself lives in the strip above).
+          const deliveredTs = timestampOf("delivered") ?? (isDelivered ? order.date_added : null);
+          const deadline = deliveredTs
+            ? new Date(new Date(deliveredTs).getTime() + returnWindowDays * 86400000)
+            : null;
+          const withinWindow = deadline ? Date.now() <= deadline.getTime() : false;
+          const itemIsReturnable = it.is_returnable == null ? true : Number(it.is_returnable) === 1;
+          const existingReturn = returnRequests[it.id];
+          // Even non-returnable items are still exchangeable, so show the
+          // deadline/status row for every delivered line.
+          const showReturnBlock = isDelivered;
+          return (
+            <div
+              key={it.id}
+              className={`flex items-start gap-4 py-5 ${idx === 0 ? "" : "border-t border-[#eee]"}`}
+            >
+              {it.product_id ? (
+                <Link
+                  href={`/product/${it.product_id}`}
+                  className="h-[64px] w-[64px] shrink-0 rounded-[8px] bg-[#f6f6f8] overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-ink transition-all"
+                >
+                  <ProductImage src={resolveImg(it.product_image)} alt={it.product_name} className="h-full w-full object-contain p-1" />
+                </Link>
+              ) : (
+                <div className="h-[64px] w-[64px] shrink-0 rounded-[8px] bg-[#f6f6f8] overflow-hidden flex items-center justify-center">
+                  <ProductImage src={resolveImg(it.product_image)} alt={it.product_name} className="h-full w-full object-contain p-1" />
                 </div>
               )}
-            </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <div className="text-right">
-                <div className="text-[15px] font-bold text-ink">{fmt(it.sub_total)}</div>
-                <div className="text-[12px] text-[#878787]">Qty: {it.quantity}</div>
-              </div>
-              {isDelivered && it.product_id && (() => {
-                const mine = myRatings[it.id];
-                const rated = mine && mine.rating > 0;
-                return (
-                  <button
-                    type="button"
-                    onClick={() => openRateModal(it.product_id as number, it.id, it.product_name)}
-                    className={`inline-flex h-[32px] items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-semibold transition-colors ${rated ? "border border-[#e7e7e7] bg-white text-ink hover:border-ink" : "bg-[#F5A524] text-white hover:brightness-110"}`}
+              <div className="flex flex-1 min-w-0 flex-col gap-1">
+                {it.product_id ? (
+                  <Link
+                    href={`/product/${it.product_id}`}
+                    className="text-[15px] font-semibold text-ink line-clamp-1 hover:underline"
                   >
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l2.4 5.4L20 8.3l-4 3.9.9 5.5L12 15.1l-4.9 2.6.9-5.5-4-3.9 5.6-.9L12 2z" />
-                    </svg>
-                    {rated ? `Rated ${mine?.rating} · Edit` : "Rate this product"}
-                  </button>
-                );
-              })()}
+                    {it.product_name}
+                  </Link>
+                ) : (
+                  <h4 className="text-[15px] font-semibold text-ink line-clamp-1">{it.product_name}</h4>
+                )}
+                {(it.size || it.color) && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#878787]">
+                    {it.color && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block h-3 w-3 rounded-full ring-1 ring-black/10" style={{ backgroundColor: it.color.swatch || "#e7e7e7" }} />
+                        {it.color.name}
+                      </span>
+                    )}
+                    {it.color && it.size && <span className="text-[#cfcfcf]">|</span>}
+                    {it.size && <span>{it.size}</span>}
+                  </div>
+                )}
+                {showReturnBlock && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11.5px]">
+                    {existingReturn ? (
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-semibold ${RETURN_STATUS_BADGE[existingReturn.status] || "bg-slate-50 text-slate-700 border-slate-200"}`}
+                      >
+                        {existingReturn.request_type === "exchange" ? "Exchange" : "Return"} ·{" "}
+                        {RETURN_STATUS_LABEL[existingReturn.status] || "Pending"}
+                      </span>
+                    ) : withinWindow ? (
+                      <span className="text-[#525151]">
+                        Return/exchange by{" "}
+                        <span className="font-semibold text-ink">
+                          {deadline?.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                      </span>
+                    ) : deadline ? (
+                      <span className="text-[#a3a3a3]">
+                        Return window closed on{" "}
+                        {deadline.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+                {isDelivered && !itemIsReturnable && (
+                  <span className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-[6px] bg-[#FEF2F2] px-2 py-0.5 text-[10.5px] font-semibold text-[#B42318]">
+                    No return · only exchange
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="text-right">
+                  <div className="text-[15px] font-bold text-ink">{fmt(it.sub_total)}</div>
+                  <div className="text-[12px] text-[#878787]">Qty: {it.quantity}</div>
+                </div>
+                {isDelivered && it.product_id && (() => {
+                  // When the buyer has an open return/exchange request for this
+                  // line, swap the Rate button for a Track Return Order CTA —
+                  // they shouldn't be rating an item they're sending back.
+                  if (existingReturn) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => { setTrackTarget({ request: existingReturn, name: it.product_name }); setTrackOpen(true); }}
+                        className="inline-flex h-[32px] items-center gap-1.5 rounded-[8px] border border-ink bg-white px-3 text-[12px] font-semibold text-ink hover:bg-ink hover:text-white transition-colors"
+                      >
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                        Track return order
+                      </button>
+                    );
+                  }
+                  const mine = myRatings[it.id];
+                  const rated = mine && mine.rating > 0;
+                  // Once a line is rated, the review is final — show a static
+                  // badge instead of a clickable button so the buyer can't
+                  // re-submit. Re-rating remains possible via the public
+                  // product page if we ever want to expose it.
+                  if (rated) {
+                    return (
+                      <span className="inline-flex h-[32px] items-center gap-1.5 rounded-[8px] border border-[#e7e7e7] bg-white px-3 text-[12px] font-semibold text-ink">
+                        <svg className="h-3.5 w-3.5 text-[#F5A524]" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 2l2.4 5.4L20 8.3l-4 3.9.9 5.5L12 15.1l-4.9 2.6.9-5.5-4-3.9 5.6-.9L12 2z" />
+                        </svg>
+                        Rated {mine?.rating}
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => openRateModal(it.product_id as number, it.id, it.product_name)}
+                      className="inline-flex h-[32px] items-center gap-1.5 rounded-[8px] bg-[#F5A524] px-3 text-[12px] font-semibold text-white hover:brightness-110 transition-colors"
+                    >
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2l2.4 5.4L20 8.3l-4 3.9.9 5.5L12 15.1l-4.9 2.6.9-5.5-4-3.9 5.6-.9L12 2z" />
+                      </svg>
+                      Rate this product
+                    </button>
+                  );
+                })()}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <hr className="border-[#eee] mt-2 mb-8" />
@@ -541,6 +765,35 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </button>
             </div>
           )}
+
+          {/* Desktop-only Need Help — fills the left column whitespace next to
+              the Delivery + Order Summary. Mobile uses the full-width block below. */}
+          <div className="hidden lg:block">
+            <h3 className="text-[15px] font-bold text-ink mb-3">Need Help</h3>
+            <div className="flex flex-col gap-2 text-[13px] text-[#525151]">
+              <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                Order Issues
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+              </Link>
+              <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+                Delivery Info
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+              </Link>
+              <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+                Returns
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+              </Link>
+            </div>
+          </div>
         </div>
 
         {/* Right column */}
@@ -612,8 +865,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {/* Need Help — full-width at the bottom of the page */}
-      <div className="mt-10 pt-6 border-t border-[#eee]">
+      {/* Need Help — mobile / tablet only. On desktop it lives inside the
+          left column above to fill the whitespace next to the order summary. */}
+      <div className="mt-10 pt-6 border-t border-[#eee] lg:hidden">
         <h3 className="text-[15px] font-bold text-ink mb-3">Need Help</h3>
         <div className="flex flex-col gap-2 text-[13px] text-[#525151]">
           <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
@@ -653,6 +907,60 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           if (rateTarget) {
             setMyRatings((prev) => ({ ...prev, [rateTarget.orderItemId]: { rating, comment } }));
           }
+        }}
+      />
+
+      <TrackReturnModal
+        open={trackOpen}
+        orderId={order.id}
+        request={trackTarget?.request ?? null}
+        itemName={trackTarget?.name}
+        onClose={() => setTrackOpen(false)}
+        onCancelled={() => {
+          // Buyer just backed out — drop the row so the Return/Exchange button
+          // re-appears on that line.
+          if (trackTarget) {
+            setReturnRequests((prev) => {
+              const next = { ...prev };
+              delete next[trackTarget.request.order_item_id];
+              return next;
+            });
+          }
+        }}
+      />
+
+      <ReturnRequestModal
+        open={returnOpen}
+        orderId={order.id}
+        items={
+          isDelivered
+            ? order.items
+                .filter((it) => !returnRequests[it.id])
+                .map((it) => ({
+                  id: it.id,
+                  product_id: it.product_id,
+                  product_name: it.product_name,
+                  product_image: resolveImg(it.product_image),
+                  size: it.size,
+                  color: it.color,
+                  quantity: it.quantity,
+                  sub_total: it.sub_total,
+                  refund_allowed: it.is_returnable == null ? true : Number(it.is_returnable) === 1,
+                }))
+            : []
+        }
+        onClose={() => setReturnOpen(false)}
+        onSubmitted={() => {
+          // Refetch the user's return requests so the badge appears immediately.
+          fetch(`${API}/api/v1/orders/${order.id}/returns`, { credentials: "include", cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => {
+              const rows: ReturnRequestRow[] = Array.isArray(j?.data?.rows) ? j.data.rows : [];
+              const map: Record<number, ReturnRequestRow> = {};
+              for (const r of rows) map[r.order_item_id] = r;
+              setReturnRequests(map);
+            })
+            .catch(() => {});
         }}
       />
     </div>

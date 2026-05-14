@@ -70,6 +70,32 @@ function getCardImg(p: Product) {
   return imgUrl(clean);
 }
 
+type ReviewMedia = { url: string; type: "image" | "video" };
+
+// Reviews store attached media as a JSON-stringified array of {url, type} in
+// the `images` column (see RateProductModal). Legacy rows may carry a plain
+// comma-separated URL list, so handle both shapes.
+function parseReviewMedia(raw: string | null | undefined): ReviewMedia[] {
+  if (!raw) return [];
+  const s = String(raw).trim();
+  if (!s) return [];
+  if (s.startsWith("[")) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) {
+        return arr
+          .filter((m): m is ReviewMedia => m && typeof m.url === "string")
+          .map((m) => ({ url: m.url, type: m.type === "video" ? "video" : "image" }));
+      }
+    } catch {}
+    return [];
+  }
+  return s.split(",")
+    .map((u) => u.trim())
+    .filter(Boolean)
+    .map((u) => ({ url: u, type: /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(u) ? "video" : "image" }));
+}
+
 function formatDate(s: string | undefined) {
   if (!s) return "";
   const d = new Date(s);
@@ -135,6 +161,8 @@ export default function ProductDetailClient({
   const [reviewTopicFilter, setReviewTopicFilter] = useState<Set<string>>(new Set());
   const [reviewPage, setReviewPage] = useState(1);
   const [ratingList, setRatingList] = useState<ProductRating[]>(ratings);
+  // Lightbox for full-size review media. `null` = closed.
+  const [lightbox, setLightbox] = useState<{ media: ReviewMedia[]; index: number } | null>(null);
 
   const voteOnRating = async (ratingId: number, currentVote: number, intent: 1 | -1) => {
     if (!isAuthed) {
@@ -1091,7 +1119,7 @@ export default function ProductDetailClient({
                   // Apply tab + rating filters client-side over the loaded ratings.
                   const filtered = ratingList.filter((r) => {
                     if (reviewRatingFilter.size > 0 && !reviewRatingFilter.has(Math.round(Number(r.rating)))) return false;
-                    if (reviewTab === "photo" && !r.images) return false;
+                    if (reviewTab === "photo" && parseReviewMedia(r.images).length === 0) return false;
                     if (reviewTab === "desc" && !(r.comment && r.comment.trim().length > 0)) return false;
                     return true;
                   });
@@ -1112,10 +1140,40 @@ export default function ProductDetailClient({
                   return (
                     <>
                       <div className="flex flex-col">
-                        {visible.map((r, idx) => (
+                        {visible.map((r, idx) => {
+                          const reviewMedia = parseReviewMedia(r.images);
+                          return (
                           <div key={r.id} className={`flex flex-col gap-2 py-5 ${idx > 0 ? "border-t border-dashed border-[#e7e7e7]" : ""}`}>
                             <StarRow value={Number(r.rating)} size={14} />
                             {r.comment && <p className="text-[14px] font-medium text-ink leading-snug">{r.comment}</p>}
+                            {reviewMedia.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                {reviewMedia.map((m, mIdx) => (
+                                  <button
+                                    key={m.url}
+                                    type="button"
+                                    onClick={() => setLightbox({ media: reviewMedia, index: mIdx })}
+                                    aria-label={m.type === "video" ? "Play review video" : "View review photo"}
+                                    className="relative h-[78px] w-[78px] shrink-0 overflow-hidden rounded-[8px] border border-[#e7e7e7] bg-[#f6f6f8] hover:border-ink transition-colors"
+                                  >
+                                    {m.type === "image" ? (
+                                      /* eslint-disable-next-line @next/next/no-img-element */
+                                      <img src={m.url} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                      <>
+                                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                                        <video src={m.url} className="h-full w-full object-cover" preload="metadata" />
+                                        <span className="absolute inset-0 flex items-center justify-center text-white bg-black/15">
+                                          <svg className="h-7 w-7 drop-shadow" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M8 5v14l11-7z" />
+                                          </svg>
+                                        </span>
+                                      </>
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                             <span className="text-[12px] text-[#8c8c8c]">{formatDate(r.data_added)}</span>
                             <div className="mt-1 flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -1153,7 +1211,8 @@ export default function ProductDetailClient({
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {totalPages > 1 && (
@@ -1392,6 +1451,71 @@ export default function ProductDetailClient({
           </div>
         </>
       )}
+
+      {/* Review media lightbox */}
+      {lightbox && (() => {
+        const m = lightbox.media[lightbox.index];
+        const hasPrev = lightbox.index > 0;
+        const hasNext = lightbox.index < lightbox.media.length - 1;
+        return (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 px-4"
+            onClick={() => setLightbox(null)}
+            role="dialog"
+            aria-label="Review media viewer"
+          >
+            <button
+              type="button"
+              onClick={() => setLightbox(null)}
+              aria-label="Close"
+              className="absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            {hasPrev && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setLightbox({ media: lightbox.media, index: lightbox.index - 1 }); }}
+                aria-label="Previous"
+                className="absolute left-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              >
+                <ChevronRight className="h-5 w-5 rotate-180" />
+              </button>
+            )}
+            {hasNext && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setLightbox({ media: lightbox.media, index: lightbox.index + 1 }); }}
+                aria-label="Next"
+                className="absolute right-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            )}
+            <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+              {m.type === "image" ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={m.url} alt="" className="max-h-[90vh] max-w-[90vw] rounded-[10px] object-contain" />
+              ) : (
+                /* eslint-disable-next-line jsx-a11y/media-has-caption */
+                <video
+                  src={m.url}
+                  controls
+                  autoPlay
+                  className="max-h-[90vh] max-w-[90vw] rounded-[10px]"
+                />
+              )}
+            </div>
+            {lightbox.media.length > 1 && (
+              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1 text-[12px] font-semibold text-white">
+                {lightbox.index + 1} / {lightbox.media.length}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <AuthModal
         isOpen={showAuth}

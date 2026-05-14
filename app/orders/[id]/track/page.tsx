@@ -13,6 +13,7 @@ type StatusEntry = { name: string; at: string | null };
 
 type OrderItem = {
   id: number;
+  product_id?: number;
   product_name: string;
   variant_name?: string;
   quantity: number;
@@ -275,11 +276,26 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
               key={it.id}
               className={`flex items-center gap-4 py-5 ${idx === 0 ? "" : "border-t border-[#eee]"}`}
             >
-              <div className="h-[64px] w-[64px] shrink-0 rounded-[8px] bg-[#f6f6f8] overflow-hidden flex items-center justify-center">
-                <ProductImage src={resolveImg(it.product_image)} alt={it.product_name} className="h-full w-full object-contain p-1" />
-              </div>
+              {it.product_id ? (
+                <Link
+                  href={`/product/${it.product_id}`}
+                  className="h-[64px] w-[64px] shrink-0 rounded-[8px] bg-[#f6f6f8] overflow-hidden flex items-center justify-center hover:ring-2 hover:ring-ink transition-all"
+                >
+                  <ProductImage src={resolveImg(it.product_image)} alt={it.product_name} className="h-full w-full object-contain p-1" />
+                </Link>
+              ) : (
+                <div className="h-[64px] w-[64px] shrink-0 rounded-[8px] bg-[#f6f6f8] overflow-hidden flex items-center justify-center">
+                  <ProductImage src={resolveImg(it.product_image)} alt={it.product_name} className="h-full w-full object-contain p-1" />
+                </div>
+              )}
               <div className="flex flex-1 min-w-0 flex-col gap-1">
-                <h4 className="text-[15px] font-semibold text-ink line-clamp-1">{it.product_name}</h4>
+                {it.product_id ? (
+                  <Link href={`/product/${it.product_id}`} className="text-[15px] font-semibold text-ink line-clamp-1 hover:underline">
+                    {it.product_name}
+                  </Link>
+                ) : (
+                  <h4 className="text-[15px] font-semibold text-ink line-clamp-1">{it.product_name}</h4>
+                )}
                 {(it.size || it.color) && (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#878787]">
                     {it.color && (
@@ -320,6 +336,36 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
                 ) : (
                   <span className="uppercase font-semibold text-ink">{order.payment_method || "—"}</span>
                 )}
+              </div>
+            </div>
+
+            {/* Need Help — sits directly under Payment on desktop so support
+                links stay close to order context. On mobile we hide this copy
+                and render Need Help at the very bottom instead (see below). */}
+            <div className="hidden lg:block">
+              <h3 className="text-[15px] font-bold text-ink mb-3">Need Help</h3>
+              <div className="flex flex-col gap-2 text-[13px] text-[#525151]">
+                <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  Order Issues
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+                </Link>
+                <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
+                  </svg>
+                  Delivery Info
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+                </Link>
+                <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                  </svg>
+                  Returns
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+                </Link>
               </div>
             </div>
           </div>
@@ -385,8 +431,9 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
 
-        {/* Need Help */}
-        <div className="mt-10 pt-6 border-t border-[#eee]">
+        {/* Need Help — mobile-only copy at the bottom of the page. On desktop
+            the same block lives under Payment in the left column. */}
+        <div className="lg:hidden mt-10 pt-6 border-t border-[#eee]">
           <h3 className="text-[15px] font-bold text-ink mb-3">Need Help</h3>
           <div className="flex flex-col gap-2 text-[13px] text-[#525151]">
             <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">

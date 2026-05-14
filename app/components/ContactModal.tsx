@@ -52,11 +52,14 @@ export default function ContactModal({ isOpen, onClose }: { isOpen: boolean; onC
       .finally(() => setLoading(false));
   }, [isOpen, settings]);
 
-  const phone = settings?.footer_phone?.trim();
-  const email = settings?.footer_email?.trim();
+  // The admin form at /admin/web-settings/general writes the canonical keys
+  // (`support_number`, `support_email`); the legacy `footer_*` keys are kept
+  // as a fallback for older configs.
+  const phone = (settings?.support_number || settings?.footer_phone || "").trim();
+  const email = (settings?.support_email || settings?.footer_email || "").trim();
   const whatsapp = settings?.footer_whatsapp?.trim();
-  const instagram = settings?.footer_instagram?.trim();
-  const facebook = settings?.footer_facebook?.trim();
+  const instagram = (settings?.instagram_link || settings?.footer_instagram || "").trim();
+  const facebook = (settings?.facebook_link || settings?.footer_facebook || "").trim();
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
