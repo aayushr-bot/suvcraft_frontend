@@ -1,11 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { imgUrl } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 type ReturnReason = { id: number; label: string; message?: string };
 type MediaAttachment = { url: string; type: "image" | "video" };
+
+// Rewrite "/uploads/..." paths to the configured uploads origin — see
+// RateProductModal for the same pattern.
+function resolveMedia(path: string): string {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const clean = path.startsWith("/uploads/") ? path.slice("/uploads/".length) : path.replace(/^\//, "");
+  return imgUrl(clean);
+}
 
 type SavedAddress = {
   id: number;
@@ -653,11 +663,11 @@ export default function ReturnRequestModal({
                   >
                     {m.type === "image" ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={m.url} alt="" className="h-full w-full object-cover" />
+                      <img src={resolveMedia(m.url)} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <div className="relative h-full w-full">
                         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                        <video src={m.url} className="h-full w-full object-cover" />
+                        <video src={resolveMedia(m.url)} className="h-full w-full object-cover" />
                         <span className="absolute inset-0 flex items-center justify-center text-white">
                           <svg className="h-7 w-7 drop-shadow" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M8 5v14l11-7z" />

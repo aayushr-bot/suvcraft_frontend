@@ -1,10 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { imgUrl } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 type MediaAttachment = { url: string; type: "image" | "video" };
+
+// Same path-to-origin rewrite the rest of the storefront uses. The return
+// request payload carries "/uploads/reviews/..." which would otherwise hit
+// the storefront origin instead of the configured uploads host.
+function resolveMedia(path: string): string {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const clean = path.startsWith("/uploads/") ? path.slice("/uploads/".length) : path.replace(/^\//, "");
+  return imgUrl(clean);
+}
 
 type ReturnRow = {
   id: number;
@@ -266,21 +277,23 @@ export default function TrackReturnModal({
               <div className="sm:col-span-2">
                 <div className="text-[11px] uppercase tracking-[0.14em] text-[#8c8c8c]">Attachments</div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {media.map((m) => (
+                  {media.map((m) => {
+                    const src = resolveMedia(m.url);
+                    return (
                     <a
                       key={m.url}
-                      href={m.url}
+                      href={src}
                       target="_blank"
                       rel="noreferrer"
                       className="relative h-[72px] w-[72px] rounded-[8px] overflow-hidden border border-[#e7e7e7] bg-[#f6f6f8] block"
                     >
                       {m.type === "image" ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={m.url} alt="" className="h-full w-full object-cover" />
+                        <img src={src} alt="" className="h-full w-full object-cover" />
                       ) : (
                         <div className="relative h-full w-full">
                           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                          <video src={m.url} className="h-full w-full object-cover" />
+                          <video src={src} className="h-full w-full object-cover" />
                           <span className="absolute inset-0 flex items-center justify-center text-white">
                             <svg className="h-7 w-7 drop-shadow" viewBox="0 0 24 24" fill="currentColor">
                               <path d="M8 5v14l11-7z" />
@@ -289,7 +302,8 @@ export default function TrackReturnModal({
                         </div>
                       )}
                     </a>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

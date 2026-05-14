@@ -1158,11 +1158,11 @@ export default function ProductDetailClient({
                                   >
                                     {m.type === "image" ? (
                                       /* eslint-disable-next-line @next/next/no-img-element */
-                                      <img src={m.url} alt="" className="h-full w-full object-cover" />
+                                      <img src={resolveImg(m.url)} alt="" className="h-full w-full object-cover" />
                                     ) : (
                                       <>
                                         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                                        <video src={m.url} className="h-full w-full object-cover" preload="metadata" />
+                                        <video src={resolveImg(m.url)} className="h-full w-full object-cover" preload="metadata" />
                                         <span className="absolute inset-0 flex items-center justify-center text-white bg-black/15">
                                           <svg className="h-7 w-7 drop-shadow" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M8 5v14l11-7z" />
@@ -1497,11 +1497,11 @@ export default function ProductDetailClient({
             <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
               {m.type === "image" ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={m.url} alt="" className="max-h-[90vh] max-w-[90vw] rounded-[10px] object-contain" />
+                <img src={resolveImg(m.url)} alt="" className="max-h-[90vh] max-w-[90vw] rounded-[10px] object-contain" />
               ) : (
                 /* eslint-disable-next-line jsx-a11y/media-has-caption */
                 <video
-                  src={m.url}
+                  src={resolveImg(m.url)}
                   controls
                   autoPlay
                   className="max-h-[90vh] max-w-[90vw] rounded-[10px]"

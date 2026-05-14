@@ -1,10 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { imgUrl } from "@/lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 type MediaAttachment = { url: string; type: "image" | "video" };
+
+// The upload endpoint returns paths like "/uploads/reviews/2026/..." which
+// resolve against the storefront origin in the browser. On prod the API and
+// storefront sit on different subdomains, so we have to rewrite the path to
+// hit NEXT_PUBLIC_UPLOADS_URL (same helper every other surface uses).
+function resolveMedia(path: string): string {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const clean = path.startsWith("/uploads/") ? path.slice("/uploads/".length) : path.replace(/^\//, "");
+  return imgUrl(clean);
+}
 
 export default function RateProductModal({
   open,
@@ -214,11 +226,11 @@ export default function RateProductModal({
                 >
                   {m.type === "image" ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={m.url} alt="" className="h-full w-full object-cover" />
+                    <img src={resolveMedia(m.url)} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="relative h-full w-full">
                       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                      <video src={m.url} className="h-full w-full object-cover" />
+                      <video src={resolveMedia(m.url)} className="h-full w-full object-cover" />
                       <span className="absolute inset-0 flex items-center justify-center text-white">
                         <svg className="h-7 w-7 drop-shadow" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M8 5v14l11-7z" />
