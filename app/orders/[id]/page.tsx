@@ -771,21 +771,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <div className="hidden lg:block">
             <h3 className="text-[15px] font-bold text-ink mb-3">Need Help</h3>
             <div className="flex flex-col gap-2 text-[13px] text-[#525151]">
-              <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+              <Link href="/faq#order-issues" className="inline-flex items-center gap-1.5 hover:text-ink">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 Order Issues
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
               </Link>
-              <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+              <Link href="/faq#delivery-info" className="inline-flex items-center gap-1.5 hover:text-ink">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
                 </svg>
                 Delivery Info
                 <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
               </Link>
-              <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+              <Link href="/faq#returns" className="inline-flex items-center gap-1.5 hover:text-ink">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                 </svg>
@@ -870,21 +870,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       <div className="mt-10 pt-6 border-t border-[#eee] lg:hidden">
         <h3 className="text-[15px] font-bold text-ink mb-3">Need Help</h3>
         <div className="flex flex-col gap-2 text-[13px] text-[#525151]">
-          <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+          <Link href="/faq#order-issues" className="inline-flex items-center gap-1.5 hover:text-ink">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
             Order Issues
             <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
           </Link>
-          <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+          <Link href="/faq#delivery-info" className="inline-flex items-center gap-1.5 hover:text-ink">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
             </svg>
             Delivery Info
             <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
           </Link>
-          <Link href="/orders" className="inline-flex items-center gap-1.5 hover:text-ink">
+          <Link href="/faq#returns" className="inline-flex items-center gap-1.5 hover:text-ink">
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
             </svg>
