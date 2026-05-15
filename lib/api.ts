@@ -278,6 +278,37 @@ export type SiteSettings = {
   safety_security_description?: string;
 };
 
+export type TicketType = {
+  id: number;
+  name: string;
+};
+
+export type SupportTicket = {
+  id: number;
+  ticket_type_id: number | null;
+  ticket_type_title?: string | null;
+  subject: string;
+  email: string;
+  description: string;
+  status: number;
+  last_updated: string;
+  date_created: string;
+  message_count?: number;
+};
+
+export type SupportTicketMessage = {
+  id: number;
+  user_type: "user" | "admin" | string;
+  user_id: number;
+  message: string;
+  attachments?: string;
+  date_created: string;
+};
+
+export type SupportTicketDetail = SupportTicket & {
+  messages: SupportTicketMessage[];
+};
+
 export type FaqItem = {
   id: number;
   question: string;
@@ -349,7 +380,54 @@ export const api = {
 
   faqs: () =>
     get<{ categories: FaqCategory[] }>('/faqs'),
+
+  ticketTypes: () =>
+    get<{ rows: TicketType[] }>('/support/ticket-types'),
+
+  myTickets: () =>
+    get<{ rows: SupportTicket[] }>('/support/tickets'),
+
+  ticket: (id: number | string) =>
+    get<{ ticket: SupportTicketDetail }>(`/support/tickets/${id}`),
 };
+
+// Reply on an existing ticket. Returns the server message so the modal can
+// confirm in-context (e.g. "Reply sent.").
+export async function postTicketReply(ticketId: number | string, message: string): Promise<void> {
+  const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+  const res = await fetch(`${BASE}/api/v1/support/tickets/${ticketId}/messages`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  const json = await res.json();
+  if (!res.ok || json?.error) {
+    throw new Error(json?.message || `Request failed (${res.status})`);
+  }
+}
+
+// Raise a support ticket. Returns the new ticket id on success, or throws
+// with the server-provided message so the modal can display it inline.
+export async function createSupportTicket(input: {
+  ticket_type_id?: number | null;
+  subject: string;
+  description: string;
+  email?: string;
+}): Promise<{ id: number }> {
+  const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+  const res = await fetch(`${BASE}/api/v1/support/tickets`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const json = await res.json();
+  if (!res.ok || json?.error) {
+    throw new Error(json?.message || `Request failed (${res.status})`);
+  }
+  return json.data as { id: number };
+}
 
 export function imgUrl(path: string) {
   if (!path) return '';
