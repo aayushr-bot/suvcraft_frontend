@@ -32,7 +32,6 @@ export default async function Footer() {
   const quickLinks = [
     { label: "Home", href: "/" },
     ...categories.slice(0, 4).map((c) => ({ label: c.name, href: `/?category_id=${c.id}` })),
-    { label: "My Wishlist", href: "/wishlist" },
     { label: "My Orders", href: "/orders" },
     { label: "Cart", href: "/cart" },
   ];
@@ -78,10 +77,11 @@ export default async function Footer() {
   return (
     <footer className="bg-[#F2F2F2] text-ink py-14 px-4 md:px-8">
       <div className="mx-auto w-full max-w-[1440px]">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-12 lg:gap-12 mb-6">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-12 lg:gap-6 lg:items-start mb-6">
 
-          {/* Branding */}
-          <div className="lg:col-span-4 flex flex-col gap-5">
+          {/* Branding — extra right padding keeps the description from
+              crowding the Policies column on wide screens. */}
+          <div className="lg:col-span-4 lg:pr-12 flex flex-col gap-5">
             <div className="flex items-center gap-3">
               {footerLogo ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
@@ -115,8 +115,23 @@ export default async function Footer() {
             )}
           </div>
 
+          {/* Policies (admin-managed legal pages) — sits before Quick Links
+              so legal docs are the first thing users see in the link area. */}
+          <div className="lg:col-span-2">
+            <h4 className="font-bold text-[16px] mb-3 text-ink">Policies</h4>
+            <ul className="flex flex-col gap-1.5">
+              {policyLinks.map((p) => (
+                <li key={p.href}>
+                  <a href={p.href} className="text-[14px] text-[#525151] hover:text-ink hover:underline">
+                    {p.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           {/* Quick Links (auto-derived from categories) */}
-          <div className="lg:col-span-3 lg:pl-45">
+          <div className="lg:col-span-2">
             <h4 className="font-bold text-[16px] mb-3 text-ink">Quick Links</h4>
             <ul className="flex flex-col gap-1.5">
               {quickLinks.map((l) => (
@@ -132,7 +147,7 @@ export default async function Footer() {
           {/* Contact — hidden entirely if admin hasn't filled anything in */}
           {hasContact && (
             <div className="lg:col-span-2">
-              <h4 className="font-bold text-[16px] mb-5 text-ink">Contact Us</h4>
+              <h4 className="font-bold text-[16px] mb-3 text-ink">Contact Us</h4>
               <ul className="flex flex-col gap-2.5 text-[14px] text-[#525151]">
                 {phone && <li className="font-medium">{phone}</li>}
                 {email && <li className="font-medium break-all">{email}</li>}
@@ -143,7 +158,7 @@ export default async function Footer() {
 
           {/* App download — hidden unless admin enables it AND set at least one URL */}
           {showApp && (
-            <div className="lg:col-span-3 flex flex-col items-center text-center">
+            <div className="lg:col-span-2 flex flex-col items-center text-center">
               <h4 className="font-bold text-[16px] mb-3 text-ink">{appTitle}</h4>
               {appTagline && <p className="text-[12px] text-[#878787] mb-1">{appTagline}</p>}
               {appShortDesc && <p className="text-[12px] text-[#878787] leading-[1.5] mb-4">{appShortDesc}</p>}
@@ -165,33 +180,21 @@ export default async function Footer() {
           )}
         </div>
 
-        {/* Legal links row — sits above the copyright so every page on the
-            storefront has one-click access to admin-managed policy pages. */}
-        <div
-          className="pt-6 mt-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, #7E7E7E 50%, transparent 50%)",
-            backgroundSize: "10px 1px",
-            backgroundRepeat: "repeat-x",
-            backgroundPosition: "top",
-          }}
-        >
-          <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:pl-20">
-            {policyLinks.map((p) => (
-              <a
-                key={p.href}
-                href={p.href}
-                className="text-[13px] font-medium text-[#525151] hover:text-ink hover:underline"
-              >
-                {p.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-
+        {/* Dotted separator + copyright. Policy links now live in their own
+            footer column (above) so this row is only the copyright line. */}
         {copyright && (
-          <p className="pt-4 text-[14px] font-medium text-ink lg:pl-20">{copyright}</p>
+          <div
+            className="pt-6 mt-8"
+            style={{
+              backgroundImage:
+                "linear-gradient(to right, #7E7E7E 50%, transparent 50%)",
+              backgroundSize: "10px 1px",
+              backgroundRepeat: "repeat-x",
+              backgroundPosition: "top",
+            }}
+          >
+            <p className="text-[14px] font-medium text-ink lg:pl-20">{copyright}</p>
+          </div>
         )}
       </div>
     </footer>
