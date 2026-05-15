@@ -98,7 +98,8 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
     || pathname === "/addresses"
     || pathname === "/saved-cards"
     || pathname === "/orders"
-    || pathname.startsWith("/orders/");
+    || pathname.startsWith("/orders/")
+    || pathname.startsWith("/policies/");
 
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isContactOpen, setIsContactOpen] = useState(false);

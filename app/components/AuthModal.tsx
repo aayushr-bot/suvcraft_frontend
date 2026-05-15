@@ -259,6 +259,17 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: { isOpen: bool
               </button>
             </p>
           )}
+
+          {/* Standard auth-form legal disclaimer. Links go to the same admin-
+              managed policy pages /policies/[slug] referenced from the
+              footer and FAQ page, so this stays in sync with whatever the
+              admin publishes — no hardcoded copy to keep updated. */}
+          <p className="text-center text-[11px] text-[#a3a3a3] leading-relaxed">
+            By {isSignin ? "signing in" : "creating an account"}, you agree to our{" "}
+            <a href="/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-ink">Privacy Policy</a>
+            {" "}and our{" "}
+            <a href="/policies/return-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-ink">Return Policy</a>.
+          </p>
         </div>
       </div>
     </Modal>

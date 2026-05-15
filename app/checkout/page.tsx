@@ -496,6 +496,16 @@ export default function CheckoutPage() {
               </svg>
               Safe and Secure Payments. Easy returns.
             </div>
+
+            {/* Legal disclaimer — covers the agreement that placing an order
+                implies acceptance of the published policies. Links open in
+                a new tab so the checkout flow isn't interrupted. */}
+            <p className="text-center text-[11px] text-[#a3a3a3] leading-relaxed">
+              By placing this order, you agree to our{" "}
+              <a href="/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-ink">Privacy Policy</a>,{" "}
+              <a href="/policies/shipping-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-ink">Shipping Policy</a>, and{" "}
+              <a href="/policies/return-policy" target="_blank" rel="noopener noreferrer" className="underline hover:text-ink">Return Policy</a>.
+            </p>
           </div>
         </div>
       </div>

@@ -61,6 +61,15 @@ export default async function Footer() {
   const appTagline  = settings.app_download_section_tagline || "";
   const appShortDesc = settings.app_download_section_short_description || "";
 
+  // ── Legal & Policies — admin manages content at /admin/policies, each row
+  // here links to the public /policies/[slug] page that renders the HTML. ─
+  const policyLinks = [
+    { label: "About Us", href: "/policies/about-us" },
+    { label: "Privacy Policy", href: "/policies/privacy-policy" },
+    { label: "Shipping Policy", href: "/policies/shipping-policy" },
+    { label: "Return Policy", href: "/policies/return-policy" },
+  ];
+
   // ── Copyright (always last; falls back gracefully) ──────────────────────
   const copyright = settings.copyright_details
     || settings.footer_copyright
@@ -156,19 +165,33 @@ export default async function Footer() {
           )}
         </div>
 
+        {/* Legal links row — sits above the copyright so every page on the
+            storefront has one-click access to admin-managed policy pages. */}
+        <div
+          className="pt-6 mt-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, #7E7E7E 50%, transparent 50%)",
+            backgroundSize: "10px 1px",
+            backgroundRepeat: "repeat-x",
+            backgroundPosition: "top",
+          }}
+        >
+          <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:pl-20">
+            {policyLinks.map((p) => (
+              <a
+                key={p.href}
+                href={p.href}
+                className="text-[13px] font-medium text-[#525151] hover:text-ink hover:underline"
+              >
+                {p.label}
+              </a>
+            ))}
+          </nav>
+        </div>
+
         {copyright && (
-          <div
-            className="pt-10 mt-8"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, #7E7E7E 50%, transparent 50%)",
-              backgroundSize: "10px 1px",
-              backgroundRepeat: "repeat-x",
-              backgroundPosition: "top",
-            }}
-          >
-            <p className="text-[14px] font-medium text-ink pl-20">{copyright}</p>
-          </div>
+          <p className="pt-4 text-[14px] font-medium text-ink lg:pl-20">{copyright}</p>
         )}
       </div>
     </footer>
