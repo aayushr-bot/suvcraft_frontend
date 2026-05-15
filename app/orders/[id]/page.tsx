@@ -178,6 +178,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  // Drives the delivery-truck slide-in on the timeline. Starts at 0 and is
+  // bumped to reachedIdx after first paint so CSS interpolates the change.
+  const [animIdx, setAnimIdx] = useState(0);
 
   function downloadInvoice() {
     if (!order) return;
@@ -347,6 +350,31 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       .catch(() => {});
   }, [order?.id, order?.status]);
 
+  // Slide the delivery truck from "Order Confirmed" → "Delivered" on load.
+  // The timeline on this page only appears for delivered orders, so the
+  // truck always animates to index 3 (the final step).
+  useEffect(() => {
+    if (!order) return;
+    if ((order.status || "").toLowerCase() !== "delivered") return;
+    const idx = 3;
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      setAnimIdx(idx);
+      return;
+    }
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setAnimIdx(idx));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [order?.id, order?.status]);
+
   function openRateModal(productId: number, orderItemId: number, name: string) {
     const existing = myRatings[orderItemId];
     setRateTarget({
@@ -406,6 +434,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const effectiveStatus = statusKey === "processed" ? "received" : statusKey;
   const currentIdx = TIMELINE_STEPS.findIndex((s) => s.key === effectiveStatus);
   const reachedIdx = currentIdx >= 0 ? currentIdx : 0;
+  // ~550ms per step travelled, clamped to 0.8s–2.2s total.
+  const animDuration = Math.min(2200, Math.max(800, reachedIdx * 550));
+  const animEasing = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+  const motionStyle = {
+    transition: `left ${animDuration}ms ${animEasing}, width ${animDuration}ms ${animEasing}`,
+  };
   const history: StatusEntry[] = order.items[0]?.status_history || [];
   const timestampOf = (key: string): string | null => {
     const hit = history.find((h) => (h.name || "").toLowerCase() === key);
@@ -482,11 +516,16 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         <div className="mb-8 border-t border-[#e7e7e7] py-6">
           <div className="flex justify-between mb-2">
             {TIMELINE_STEPS.map((step, idx) => {
-              const reached = idx <= reachedIdx;
+              // Light up each label as the truck reaches its position.
+              const reached = idx <= animIdx + 0.001;
+              const delay = reachedIdx > 0
+                ? Math.max(0, (idx / reachedIdx) * animDuration - 80)
+                : 0;
               return (
                 <div
                   key={step.key}
-                  className={`w-0 flex-1 text-center text-[12px] font-semibold ${reached ? "text-[#F17A20]" : "text-[#9c9c9c]"}`}
+                  className={`w-0 flex-1 text-center text-[12px] font-semibold transition-colors duration-300 ${reached ? "text-[#F17A20]" : "text-[#9c9c9c]"}`}
+                  style={{ transitionDelay: `${delay}ms` }}
                 >
                   {step.label}
                 </div>
@@ -505,23 +544,34 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               className="absolute top-1/2 -translate-y-1/2 h-[3px] bg-[#F17A20]"
               style={{
                 left: `${(0.5 / TIMELINE_STEPS.length) * 100}%`,
-                width: `${(reachedIdx / TIMELINE_STEPS.length) * 100}%`,
+                width: `${(animIdx / TIMELINE_STEPS.length) * 100}%`,
+                ...motionStyle,
               }}
             />
             {TIMELINE_STEPS.map((step, idx) => {
+              // Hide the destination marker — the parked truck covers it.
               if (idx === reachedIdx) return null;
-              const reached = idx < reachedIdx;
+              const reached = idx < animIdx;
+              const delay = reachedIdx > 0
+                ? Math.max(0, (idx / reachedIdx) * animDuration - 80)
+                : 0;
               return (
                 <div
                   key={`marker-${step.key}`}
-                  className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full ${reached ? "bg-[#F17A20]" : "bg-white border-2 border-[#D0D5DD]"}`}
-                  style={{ left: `${((idx + 0.5) / TIMELINE_STEPS.length) * 100}%` }}
+                  className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full transition-colors duration-200 ${reached ? "bg-[#F17A20]" : "bg-white border-2 border-[#D0D5DD]"}`}
+                  style={{
+                    left: `${((idx + 0.5) / TIMELINE_STEPS.length) * 100}%`,
+                    transitionDelay: `${delay}ms`,
+                  }}
                 />
               );
             })}
             <div
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-              style={{ left: `${((reachedIdx + 0.5) / TIMELINE_STEPS.length) * 100}%` }}
+              style={{
+                left: `${((animIdx + 0.5) / TIMELINE_STEPS.length) * 100}%`,
+                ...motionStyle,
+              }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/figma/delivery_car.png" alt="" className="h-[64px] w-auto block" />

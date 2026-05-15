@@ -139,6 +139,61 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
   const effectiveStatus = statusKey === "processed" ? "received" : statusKey;
   const currentIdx = TIMELINE_STEPS.findIndex((s) => s.key === effectiveStatus);
   const reachedIdx = currentIdx >= 0 ? currentIdx : 0;
+
+  // animIdx is a fractional 0..reachedIdx value that drives the truck position,
+  // the orange progress bar width, and the marker fill state during the load
+  // animation. Snaps to reachedIdx if the user prefers reduced motion.
+  return (
+    <TrackOrderView
+      order={order}
+      isCancelled={isCancelled}
+      reachedIdx={reachedIdx}
+    />
+  );
+}
+
+function TrackOrderView({
+  order,
+  isCancelled,
+  reachedIdx,
+}: {
+  order: OrderDetail;
+  isCancelled: boolean;
+  reachedIdx: number;
+}) {
+  // Drives the truck's left position, the orange bar's width, and the label
+  // colours. Starts at 0 on mount, then transitions to reachedIdx after first
+  // paint so the browser sees a real CSS transition (not a static value).
+  const [animIdx, setAnimIdx] = useState(0);
+  // ~550ms per step travelled, clamped to 0.8s–2.2s total.
+  const duration = Math.min(2200, Math.max(800, reachedIdx * 550));
+
+  useEffect(() => {
+    if (isCancelled) return;
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion || reachedIdx <= 0) {
+      setAnimIdx(reachedIdx);
+      return;
+    }
+    // Double-RAF defers the state flip past the first commit so the browser
+    // interpolates from 0 → reachedIdx instead of just snapping to the end.
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setAnimIdx(reachedIdx));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [reachedIdx, isCancelled]);
+
+  const easing = "cubic-bezier(0.22, 0.61, 0.36, 1)";
+  const motionStyle = {
+    transition: `left ${duration}ms ${easing}, width ${duration}ms ${easing}`,
+  };
   const history: StatusEntry[] = order.items[0]?.status_history || [];
   const timestampOf = (key: string): string | null => {
     const hit = history.find((h) => (h.name || "").toLowerCase() === key);
@@ -210,11 +265,16 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
           <div className="mb-8 border-t border-[#e7e7e7] py-6">
             <div className="flex justify-between mb-2">
               {TIMELINE_STEPS.map((step, idx) => {
-                const reached = idx <= reachedIdx;
+                // Step lights up the moment the truck reaches (or passes) it.
+                const reached = idx <= animIdx + 0.001;
+                const delay = reachedIdx > 0
+                  ? Math.max(0, (idx / reachedIdx) * duration - 80)
+                  : 0;
                 return (
                   <div
                     key={step.key}
-                    className={`w-0 flex-1 text-center text-[12px] font-semibold ${reached ? "text-[#F17A20]" : "text-[#9c9c9c]"}`}
+                    className={`w-0 flex-1 text-center text-[12px] font-semibold transition-colors duration-300 ${reached ? "text-[#F17A20]" : "text-[#9c9c9c]"}`}
+                    style={{ transitionDelay: `${delay}ms` }}
                   >
                     {step.label}
                   </div>
@@ -233,23 +293,39 @@ export default function TrackOrderPage({ params }: { params: Promise<{ id: strin
                 className="absolute top-1/2 -translate-y-1/2 h-[3px] bg-[#F17A20]"
                 style={{
                   left: `${(0.5 / TIMELINE_STEPS.length) * 100}%`,
-                  width: `${(reachedIdx / TIMELINE_STEPS.length) * 100}%`,
+                  width: `${(animIdx / TIMELINE_STEPS.length) * 100}%`,
+                  ...motionStyle,
                 }}
               />
               {TIMELINE_STEPS.map((step, idx) => {
+                // Hide the destination marker — the parked truck covers it.
                 if (idx === reachedIdx) return null;
-                const reached = idx < reachedIdx;
+                // Uses animIdx (which flips 0 → reachedIdx after first paint)
+                // so each marker actually has a "from" state to transition
+                // out of.
+                const reached = idx < animIdx;
+                // Stagger each marker's fill so it pops as the truck passes,
+                // not all at once.
+                const delay = reachedIdx > 0
+                  ? Math.max(0, (idx / reachedIdx) * duration - 80)
+                  : 0;
                 return (
                   <div
                     key={`marker-${step.key}`}
-                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full ${reached ? "bg-[#F17A20]" : "bg-white border-2 border-[#D0D5DD]"}`}
-                    style={{ left: `${((idx + 0.5) / TIMELINE_STEPS.length) * 100}%` }}
+                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full transition-colors duration-200 ${reached ? "bg-[#F17A20]" : "bg-white border-2 border-[#D0D5DD]"}`}
+                    style={{
+                      left: `${((idx + 0.5) / TIMELINE_STEPS.length) * 100}%`,
+                      transitionDelay: `${delay}ms`,
+                    }}
                   />
                 );
               })}
               <div
                 className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2"
-                style={{ left: `${((reachedIdx + 0.5) / TIMELINE_STEPS.length) * 100}%` }}
+                style={{
+                  left: `${((animIdx + 0.5) / TIMELINE_STEPS.length) * 100}%`,
+                  ...motionStyle,
+                }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/figma/delivery_car.png" alt="" className="h-[64px] w-auto block" />
