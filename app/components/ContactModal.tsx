@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Modal from "./Modal";
 import { X } from "./icons";
@@ -173,6 +173,10 @@ export default function ContactModal({ isOpen, onClose }: { isOpen: boolean; onC
   const [activeTicketId, setActiveTicketId] = useState<number | null>(null);
   const [loadingTicket, setLoadingTicket] = useState(false);
   const [replyText, setReplyText] = useState("");
+  // Ref on the thread scroll container — used to auto-scroll new admin
+  // replies into view, but only when the user is already near the bottom
+  // (so we don't yank them away from older messages they're reading).
+  const threadRef = useRef<HTMLDivElement>(null);
 
   // Reset every time the modal closes so re-opening starts fresh on the home tab.
   useEffect(() => {
@@ -242,6 +246,40 @@ export default function ContactModal({ isOpen, onClose }: { isOpen: boolean; onC
       setLoadingTicket(false);
     }
   }
+
+  // Poll the active ticket every 10s while the user is on the detail view
+  // so admin replies appear without a manual refresh. The list view gets a
+  // slower 30s refresh so "last update" timestamps and unread counts stay
+  // honest. Both stop when the modal closes or the view changes.
+  useEffect(() => {
+    if (!isOpen || view !== "detail" || !activeTicketId) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      try {
+        const d = await api.ticket(activeTicketId);
+        if (!cancelled) setActiveTicket(d.ticket);
+      } catch { /* keep showing what we have */ }
+    };
+    const i = setInterval(tick, 10_000);
+    return () => { cancelled = true; clearInterval(i); };
+  }, [isOpen, view, activeTicketId]);
+
+  useEffect(() => {
+    if (!isOpen || view !== "list") return;
+    const i = setInterval(() => { refreshMyTickets(); }, 30_000);
+    return () => clearInterval(i);
+  }, [isOpen, view]);
+
+  // Auto-scroll the thread to the bottom when new messages arrive — but only
+  // if the user was already near the bottom. If they've scrolled up to read
+  // earlier messages, don't yank them down.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el || view !== "detail") return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+  }, [activeTicket?.messages.length, view]);
 
   async function submitReply() {
     if (!activeTicketId) return;
@@ -555,7 +593,11 @@ export default function ContactModal({ isOpen, onClose }: { isOpen: boolean; onC
                   </div>
 
                   {/* Thread */}
-                  <div className="flex flex-col gap-3 max-h-[280px] overflow-y-auto pr-1">
+                  <div
+                    ref={threadRef}
+                    className="flex flex-col gap-3 max-h-[280px] overflow-y-scroll pr-1"
+                    style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
+                  >
                     {activeTicket.messages.map((m) => {
                       const fromAdmin = m.user_type === "admin";
                       return (
