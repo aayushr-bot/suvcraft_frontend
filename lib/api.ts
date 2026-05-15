@@ -278,6 +278,25 @@ export type SiteSettings = {
   safety_security_description?: string;
 };
 
+export type FaqItem = {
+  id: number;
+  question: string;
+  answer: string;
+  sort_order?: number;
+};
+
+export type FaqCategory = {
+  id: number;
+  slug: string;
+  label: string;
+  blurb?: string;
+  /** Free-form key the storefront maps to an icon component. */
+  icon?: string;
+  sort_order?: number;
+  status?: number;
+  items: FaqItem[];
+};
+
 export type ProductRating = {
   id: number;
   rating: number;
@@ -327,6 +346,9 @@ export const api = {
 
   collections: () =>
     get<{ rows: Collection[] }>('/collections'),
+
+  faqs: () =>
+    get<{ categories: FaqCategory[] }>('/faqs'),
 };
 
 export function imgUrl(path: string) {
