@@ -20,6 +20,15 @@ export type CartItem = {
   size?: string;
   color?: { name: string; swatch?: string };
   variant_id?: number;
+  // Backend-derived availability flags — driven by the live variant stock at
+  // each cart refresh. Used to render OOS / "Only N left" banners and to
+  // block checkout when any row is unavailable.
+  availability?: 'in_stock' | 'low_stock' | 'insufficient_stock' | 'out_of_stock' | 'unavailable';
+  out_of_stock?: boolean;
+  insufficient_stock?: boolean;
+  low_stock?: boolean;
+  /** Resolved available units (null when stock is unlimited). */
+  available_stock?: number | null;
 };
 
 type State = { items: CartItem[]; saved: CartItem[] };
@@ -139,6 +148,11 @@ type CartContextType = {
   finalTotal: number;
   applyCoupon: (code: string) => Promise<{ ok: boolean; error?: string }>;
   removeCoupon: () => void;
+  // True when one or more cart rows are out-of-stock, insufficient, or
+  // pointing at a now-inactive product/variant. Drives the "Place Order"
+  // button's disabled state on the cart page.
+  hasBlockingIssue: boolean;
+  blockingItems: CartItem[];
 };
 
 const CartContext = createContext<CartContextType>({
@@ -162,6 +176,8 @@ const CartContext = createContext<CartContextType>({
   finalTotal: 0,
   applyCoupon: async () => ({ ok: false }),
   removeCoupon: () => {},
+  hasBlockingIssue: false,
+  blockingItems: [],
 });
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -468,6 +484,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const couponDiscount = coupon ? Math.min(coupon.discount, total) : 0;
   const finalTotal = Math.max(0, total - couponDiscount + taxTotal + deliveryCharge);
 
+  // Aggregate the per-row availability flags into a single "can we let the
+  // user click Place Order?" boolean. Anything that's OOS, insufficient, or
+  // pointing at a now-inactive product/variant blocks checkout. "low_stock"
+  // is fine — it's just a UX hint.
+  const blockingItems = state.items.filter(
+    (i) => i.out_of_stock || i.insufficient_stock || i.availability === 'unavailable',
+  );
+  const hasBlockingIssue = blockingItems.length > 0;
+
   return (
     <CartContext.Provider
       value={{
@@ -491,6 +516,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         finalTotal,
         applyCoupon,
         removeCoupon,
+        hasBlockingIssue,
+        blockingItems,
       }}
     >
       {children}

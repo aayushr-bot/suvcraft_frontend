@@ -44,7 +44,7 @@ function formatDeliveryDate(daysFromNow: number) {
 }
 
 export default function CartPage() {
-  const { items, saved, removeFromCart, updateQty, updateLimits, moveToSaved, moveToCart, removeFromSaved, total, count, taxTotal, deliveryCharge, freeDeliveryThreshold, coupon, couponDiscount, finalTotal, applyCoupon, removeCoupon } = useCart();
+  const { items, saved, removeFromCart, updateQty, updateLimits, moveToSaved, moveToCart, removeFromSaved, total, count, taxTotal, deliveryCharge, freeDeliveryThreshold, coupon, couponDiscount, finalTotal, applyCoupon, removeCoupon, hasBlockingIssue, blockingItems } = useCart();
   const [couponInput, setCouponInput] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponError, setCouponError] = useState("");
@@ -371,6 +371,29 @@ export default function CartPage() {
                         </div>
                       )}
 
+                      {/* Live stock status — driven by the backend's
+                          availability flag, set whenever the cart refreshes.
+                          OOS / unavailable shows a red banner; low-stock is a
+                          softer amber nudge ("Only N left — order soon"). */}
+                      {item.availability === 'out_of_stock' || item.availability === 'unavailable' ? (
+                        <div className="inline-flex w-fit items-center gap-1.5 rounded-[6px] bg-[#FEF2F2] px-2.5 py-1 text-[11px] sm:text-[12px] font-semibold text-[#B42318]">
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          {item.availability === 'unavailable' ? 'No longer available' : 'Out of stock'}
+                        </div>
+                      ) : item.availability === 'insufficient_stock' ? (
+                        <div className="inline-flex w-fit items-center gap-1.5 rounded-[6px] bg-[#FFF7ED] px-2.5 py-1 text-[11px] sm:text-[12px] font-semibold text-[#9A3412]">
+                          Only {item.available_stock} left — reduce qty to continue
+                        </div>
+                      ) : item.availability === 'low_stock' ? (
+                        <div className="inline-flex w-fit items-center gap-1.5 rounded-[6px] bg-[#FFFBEB] px-2.5 py-1 text-[11px] sm:text-[12px] font-semibold text-[#92400E]">
+                          Only {item.available_stock} left in stock — order soon
+                        </div>
+                      ) : null}
+
                       <div className="flex h-[40px] w-[108px] items-center justify-between rounded-[8px] border border-[#cfcfcf] px-3">
                         <button
                           onClick={() => changeQty(item, -1)}
@@ -617,10 +640,28 @@ export default function CartPage() {
               </div>
             </div>
 
+            {/* Top-level blocker if any line is OOS / unavailable. Stops the
+                user from clicking Place Order and losing time on the address
+                step, which would then fail at the server with a 409. */}
+            {hasBlockingIssue && (
+              <div className="flex items-start gap-3 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+                <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>
+                  {blockingItems.length === 1
+                    ? `"${blockingItems[0].name}" is no longer available. Remove it to continue.`
+                    : `${blockingItems.length} items in your cart are no longer available. Remove them to continue.`}
+                </span>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleCheckout}
-              disabled={items.length === 0}
+              disabled={items.length === 0 || hasBlockingIssue}
               className="flex h-[58px] w-full items-center justify-center rounded-[10px] bg-[#1c1c1c] text-[16px] font-bold text-white hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#1c1c1c]"
             >
               Check Out Now

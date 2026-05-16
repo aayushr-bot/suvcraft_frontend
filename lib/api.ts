@@ -54,6 +54,10 @@ export type ProductVariant = {
   price: number;
   special_price: number;
   stock: number | null;
+  /** Admin-uploaded image paths attached to this specific variant (Amazon-style
+   *  per-colour photography). Storefront swaps the gallery to these when the
+   *  matched variant has any; falls back to the product gallery otherwise. */
+  images?: string[];
 };
 
 export type ProductDetail = Product & {
@@ -72,6 +76,12 @@ export type ProductDetail = Product & {
   is_prices_inclusive_tax?: number;
   attribute_options?: AttributeOption[];
   variants?: ProductVariant[];
+  /** "variant_wise" | "product_wise" | "unlimited" — drives how the
+   *  storefront interprets null variant stock (OOS vs. unlimited). */
+  stock_type?: string | null;
+  /** Admin-configured threshold below which the storefront should show an
+   *  "Only N left in stock — order soon" nudge on the product detail page. */
+  low_stock_limit?: number | null;
 };
 
 export type Category = {
@@ -80,6 +90,13 @@ export type Category = {
   slug: string;
   status: number;
   page_url?: string;
+};
+
+export type Brand = {
+  id: number;
+  name: string;
+  slug: string;
+  image?: string | null;
 };
 
 export type CategoryTab = {
@@ -362,6 +379,9 @@ export const api = {
 
   categories: () =>
     get<Paginated<Category>>('/categories', { per_page: 100, status: '1' }),
+
+  brands: () =>
+    get<{ rows: Brand[] }>('/brands'),
 
   categoryTabs: (params?: Record<string, string | number>) =>
     get<{ rows: CategoryTab[] }>('/category-tabs', params),

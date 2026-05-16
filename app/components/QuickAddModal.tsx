@@ -102,6 +102,54 @@ export default function QuickAddModal({
     );
   })();
 
+  // Exact match (no fallback) — used to flip the button to "Out of Stock"
+  // only when the shopper has actually picked a full combo with zero stock.
+  const exactVariantMatch = (() => {
+    const wanted = [selectedColorId, selectedSizeId].filter((n): n is number => !!n);
+    if (!wanted.length) return null;
+    return variants.find((v) => wanted.every((id) => v.attribute_value_ids.includes(id))) || null;
+  })();
+
+  // Mirrors the product detail page's stock_type interpretation so the picker
+  // chips behave the same in both surfaces. Null variant stock means "OOS"
+  // for variant-wise products and "unlimited" for product-wise / unlimited.
+  const stockType = String(product?.stock_type || "").toLowerCase();
+  const isVariantStock = stockType.includes("variant");
+  const isUnlimitedStock = stockType.includes("unlimited");
+
+  function readVariantStock(v: { stock: number | null }): number {
+    if (isUnlimitedStock) return Infinity;
+    if (v.stock != null) return Number(v.stock);
+    return isVariantStock ? 0 : Infinity;
+  }
+
+  // What if the shopper picked `valueId` for `attrId`, keeping the other
+  // attribute's current pick? Returns total stock across matching variants.
+  // Returns 0 (OOS) when no variant exists for the candidate combo at all —
+  // same behavior as the full product detail picker.
+  function stockForCandidate(attrId: number, valueId: number): number {
+    const otherSelections: number[] = [];
+    if (colorAttr && colorAttr.id !== attrId && selectedColorId != null) otherSelections.push(selectedColorId);
+    if (sizeAttr && sizeAttr.id !== attrId && selectedSizeId != null) otherSelections.push(selectedSizeId);
+    const wanted = [...otherSelections, valueId];
+    let total = 0;
+    let matched = false;
+    for (const v of variants) {
+      if (!wanted.every((id) => v.attribute_value_ids.includes(id))) continue;
+      matched = true;
+      const s = readVariantStock(v);
+      if (s === Infinity) return Infinity;
+      total += s;
+    }
+    return matched ? total : 0;
+  }
+
+  // True when the selected combo resolves to zero stock — flips Add to Cart
+  // to "Out of Stock" even though the product rollup might show stock for
+  // other combos.
+  const selectedComboOutOfStock =
+    exactVariantMatch != null && readVariantStock(exactVariantMatch) <= 0;
+
   const { current, original } = (() => {
     if (matchedVariant) {
       const sp = Number(matchedVariant.special_price ?? 0);
@@ -141,6 +189,7 @@ export default function QuickAddModal({
   const handleAdd = () => {
     if (!product) return;
     if (isOutOfStock) { setErrMsg("This product is out of stock."); return; }
+    if (selectedComboOutOfStock) { setErrMsg("This combination is out of stock — please pick another size or colour."); return; }
     if (colorAttr && colorAttr.values.length > 0 && !selectedColorId) {
       setErrMsg(`Please select a ${colorAttr.name.toLowerCase()}.`);
       return;
@@ -235,17 +284,28 @@ export default function QuickAddModal({
                       {colorAttr.values.map((v) => {
                         const active = selectedColorId === v.id;
                         const swatch = String(v.swatche_value || "").trim() || "#e7e7e7";
+                        const oos = stockForCandidate(colorAttr.id, v.id) <= 0;
                         return (
                           <button
                             key={v.id}
                             type="button"
                             onClick={() => { setSelectedColorId(v.id); setErrMsg(""); }}
                             aria-pressed={active}
-                            aria-label={`${colorAttr.name} ${v.value}`}
-                            title={v.value}
+                            aria-label={`${colorAttr.name} ${v.value}${oos ? " — out of stock" : ""}`}
+                            aria-disabled={oos}
+                            disabled={oos}
+                            title={oos ? `${v.value} — out of stock` : v.value}
                             style={{ backgroundColor: swatch }}
-                            className={`h-[28px] w-[40px] cursor-pointer rounded-[2px] transition-all ${active ? "ring-[1.5px] ring-black ring-offset-4 ring-offset-white" : "border border-[#e7e7e7] hover:border-ink/40"}`}
-                          />
+                            className={`relative h-[28px] w-[40px] overflow-hidden rounded-[2px] transition-all ${
+                              active ? "ring-[1.5px] ring-black ring-offset-4 ring-offset-white" : "border border-[#e7e7e7] hover:border-ink/40"
+                            } ${oos ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          >
+                            {oos && (
+                              <span aria-hidden className="pointer-events-none absolute inset-0">
+                                <span className="absolute left-0 right-0 top-1/2 h-[1.5px] -translate-y-1/2 rotate-[-14deg] bg-red-500/70" />
+                              </span>
+                            )}
+                          </button>
                         );
                       })}
                     </div>
@@ -260,14 +320,29 @@ export default function QuickAddModal({
                     <div className="flex flex-wrap gap-2">
                       {sizeAttr.values.map((v) => {
                         const active = selectedSizeId === v.id;
+                        const oos = stockForCandidate(sizeAttr.id, v.id) <= 0;
                         return (
                           <button
                             key={v.id}
                             type="button"
                             onClick={() => { setSelectedSizeId(v.id); setErrMsg(""); }}
-                            className={`inline-flex h-[36px] min-w-[48px] cursor-pointer items-center justify-center rounded-[5px] border px-3 text-[12px] font-semibold transition-colors ${active ? "border-ink bg-ink text-white" : "border-[#d4d4d4] bg-white text-ink hover:border-ink"}`}
+                            disabled={oos}
+                            aria-disabled={oos}
+                            title={oos ? "Out of stock for this selection" : undefined}
+                            className={`relative inline-flex h-[36px] min-w-[48px] items-center justify-center overflow-hidden rounded-[5px] border px-3 text-[12px] font-semibold transition-colors ${
+                              active
+                                ? "border-ink bg-ink text-white"
+                                : oos
+                                  ? "border-[#d4d4d4] bg-[#f6f6f8] text-[#9c9c9c] line-through cursor-not-allowed"
+                                  : "border-[#d4d4d4] bg-white text-ink hover:border-ink cursor-pointer"
+                            }`}
                           >
-                            {v.value}
+                            <span className="relative z-10">{v.value}</span>
+                            {oos && (
+                              <span aria-hidden className="pointer-events-none absolute inset-0">
+                                <span className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 rotate-[-18deg] bg-[#9c9c9c]" />
+                              </span>
+                            )}
                           </button>
                         );
                       })}
@@ -282,7 +357,7 @@ export default function QuickAddModal({
                   <div className="inline-flex h-[40px] items-center rounded-[8px] border border-[#e7e7e7] bg-[#fdfdfd]">
                     <button
                       onClick={decQty}
-                      disabled={isOutOfStock || qty - stepSize < minQty}
+                      disabled={isOutOfStock || selectedComboOutOfStock || qty - stepSize < minQty}
                       className="flex h-full w-[40px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-l-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <MinusIcon className="h-4 w-4" />
@@ -292,7 +367,7 @@ export default function QuickAddModal({
                     </span>
                     <button
                       onClick={incQty}
-                      disabled={isOutOfStock || qty + stepSize > maxQty}
+                      disabled={isOutOfStock || selectedComboOutOfStock || qty + stepSize > maxQty}
                       className="flex h-full w-[40px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-r-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="h-4 w-4" />
@@ -312,10 +387,10 @@ export default function QuickAddModal({
               <button
                 type="button"
                 onClick={handleAdd}
-                disabled={isOutOfStock}
+                disabled={isOutOfStock || selectedComboOutOfStock}
                 className="inline-flex h-[48px] w-full cursor-pointer items-center justify-center rounded-[8px] bg-ink text-[15px] font-medium text-white hover:bg-black disabled:opacity-50"
               >
-                {isOutOfStock ? "Out of Stock" : "Add to Cart"}
+                {isOutOfStock || selectedComboOutOfStock ? "Out of Stock" : "Add to Cart"}
               </button>
             </div>
           )}

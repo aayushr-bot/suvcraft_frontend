@@ -140,7 +140,11 @@ export default function ProductDetailClient({
   popular?: Product[];
   settings?: Record<string, unknown>;
 }) {
-  const images = parseImages(product);
+  // Product-level gallery, used as the fallback when no variant is selected
+  // or the matched variant has no per-variant images. The variant-aware
+  // `images` derivation lives further down, after `matchedVariant` is
+  // computed — see the "Variant-aware gallery" block.
+  const productImages = parseImages(product);
 
   const minQty = Math.max(1, Number(product.minimum_order_quantity) || 1);
   const stepSize = Math.max(1, Number(product.quantity_step_size) || 1);
@@ -214,11 +218,8 @@ export default function ProductDetailClient({
     }
   };
   const [activeIdx, setActiveIdx] = useState(0);
-  const activeImg = images[activeIdx] ?? images[0];
-  function setActiveImg(img: string) {
-    const i = images.indexOf(img);
-    if (i >= 0) setActiveIdx(i);
-  }
+  // NOTE: `activeImg` and `setActiveImg` are derived after the variant-aware
+  // gallery is computed further down — see the "Variant-aware gallery" block.
   const [qty, setQty] = useState(minQty);
   const [showCartPopup, setShowCartPopup] = useState(false);
   const [popupMsg, setPopupMsg] = useState("Product added to cart.");
@@ -260,6 +261,112 @@ export default function ProductDetailClient({
       null
     );
   })();
+
+  // Variant-aware gallery. When the matched variant has its own uploaded
+  // images, those win (Amazon-style: pick "red" and the photos swap to red
+  // ones). Falls back to the product-level gallery otherwise. Always returns
+  // at least the placeholder so the carousel never crashes on an empty array.
+  const images = (() => {
+    const variantPaths = matchedVariant?.images ?? [];
+    if (!variantPaths.length) return productImages;
+    const resolved = variantPaths.map((p) => resolveImg(p));
+    return resolved.length ? resolved : productImages;
+  })();
+  // Reset the gallery's active thumbnail when the source list changes so the
+  // shopper sees the first photo of the new variant, not stranded at index 5
+  // of a 3-photo gallery.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setActiveIdx(0); }, [matchedVariant?.id, images.length]);
+
+  // Now safe to derive — the gallery list is finalised above.
+  const activeImg = images[activeIdx] ?? images[0];
+  function setActiveImg(img: string) {
+    const i = images.indexOf(img);
+    if (i >= 0) setActiveIdx(i);
+  }
+
+  // Exact match (no fallback) — used to decide whether the currently-selected
+  // combo has its OWN stock value, vs. a partial selection that falls back to
+  // product-level stock.
+  const exactVariantMatch = (() => {
+    const wanted = [selectedColorId, selectedSizeId].filter((n): n is number => !!n);
+    if (!wanted.length) return null;
+    return variants.find((v) => wanted.every((id) => v.attribute_value_ids.includes(id))) || null;
+  })();
+
+  // How to read a variant's stock value depends on the product's stock_type:
+  //  - "variant" → variant.stock is authoritative. null means "never set"
+  //    which is effectively zero / out of stock.
+  //  - "unlimited" → variants are always in stock regardless of value.
+  //  - "product" / anything else → variant.stock is best-effort. null means
+  //    "fall back to product-level stock", so treat as unlimited at the
+  //    variant level (product-level guard still applies via isOutOfStock).
+  const stockType = String((product as { stock_type?: string | null }).stock_type || "").toLowerCase();
+  const isVariantStock = stockType.includes("variant");
+  const isUnlimitedStock = stockType.includes("unlimited");
+
+  function readVariantStock(v: { stock: number | null }): number {
+    if (isUnlimitedStock) return Infinity;
+    if (v.stock != null) return Number(v.stock);
+    return isVariantStock ? 0 : Infinity;
+  }
+
+  // True only when the user has picked a complete combo (every attribute set)
+  // AND the matched variant resolves to zero stock. Used to disable the Add
+  // to Cart / Buy Now buttons and to label them "Out of Stock" even when the
+  // product-level rollup says there's stock in other variants.
+  const selectedComboOutOfStock =
+    exactVariantMatch != null && readVariantStock(exactVariantMatch) <= 0;
+
+  // One-shot dev console snapshot so we can confirm what variants[] looks
+  // like when the OOS picker logic doesn't seem to apply. Logs only in the
+  // browser, only in dev, and only once per mount.
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    const w = window as unknown as { __pdLogged?: Set<number> };
+    w.__pdLogged ||= new Set<number>();
+    if (!w.__pdLogged.has(product.id)) {
+      w.__pdLogged.add(product.id);
+      // eslint-disable-next-line no-console
+      console.log("[ProductDetail] product", product.id, "variants:", variants.map((v) => ({
+        id: v.id,
+        attribute_value_ids: v.attribute_value_ids,
+        stock: v.stock,
+      })));
+      // eslint-disable-next-line no-console
+      console.log("[ProductDetail] attribute_options:", attributeOptions.map((a) => ({
+        id: a.id,
+        name: a.name,
+        values: a.values.map((vv) => ({ id: vv.id, value: vv.value })),
+      })));
+    }
+  }
+
+  // Given a picker candidate (e.g. "what if I picked size 3XXL?"), return the
+  // total stock available across variants that match the candidate plus the
+  // current selection for the OTHER attribute. Returns Infinity when a
+  // matching variant has no stock value (treated as unlimited). Drives the
+  // grey-out / strike-through state on the colour + size chips so OOS combos
+  // are visible (Amazon / Flipkart style) but not selectable.
+  function stockForCandidate(attrId: number, valueId: number): number {
+    const otherSelections: number[] = [];
+    if (colorAttr && colorAttr.id !== attrId && selectedColorId != null) otherSelections.push(selectedColorId);
+    if (sizeAttr && sizeAttr.id !== attrId && selectedSizeId != null) otherSelections.push(selectedSizeId);
+    const wanted = [...otherSelections, valueId];
+    let total = 0;
+    let matched = false;
+    for (const v of variants) {
+      if (!wanted.every((id) => v.attribute_value_ids.includes(id))) continue;
+      matched = true;
+      const s = readVariantStock(v);
+      if (s === Infinity) return Infinity;
+      total += s;
+    }
+    // No variant row matched at all → the combo simply doesn't exist for this
+    // product (e.g. red/3XS was never added). Treat as OOS so the chip greys
+    // out, matching how shoppers expect "this size + colour isn't sold" to
+    // read on Amazon / Flipkart.
+    return matched ? total : 0;
+  }
 
   // Variant price wins when present; otherwise fall back to the product-level price.
   const { current, original } = (() => {
@@ -659,15 +766,30 @@ export default function ProductDetailClient({
                   // Use the swatche_value (hex) when present; fall back to a
                   // light grey so the swatch is still visible.
                   const swatch = (v.swatche_value || "").trim() || "#e7e7e7";
+                  // OOS for the current size choice — still rendered so the
+                  // shopper knows the colour exists, but greyed + struck.
+                  const oos = stockForCandidate(colorAttr.id, v.id) <= 0;
                   return (
                     <button
                       key={v.id}
                       type="button"
-                      aria-label={`${colorAttr.name} ${v.value}`}
+                      aria-label={`${colorAttr.name} ${v.value}${oos ? " — out of stock" : ""}`}
+                      aria-disabled={oos}
+                      disabled={oos}
                       onClick={() => { setSelectedColorId(v.id); setQtyError(""); }}
                       style={{ backgroundColor: swatch }}
-                      className={`h-[28px] w-[64px] cursor-pointer rounded-[2px] transition-all ${active ? "ring-[1.5px] ring-black ring-offset-4 ring-offset-white" : "border border-[#e7e7e7] hover:border-ink/40"}`}
-                    />
+                      className={`relative h-[28px] w-[64px] rounded-[2px] transition-all overflow-hidden ${
+                        active ? "ring-[1.5px] ring-black ring-offset-4 ring-offset-white" : "border border-[#e7e7e7] hover:border-ink/40"
+                      } ${oos ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                    >
+                      {oos && (
+                        // Diagonal strike across the swatch — Amazon/Flipkart
+                        // pattern for "not available right now".
+                        <span aria-hidden className="pointer-events-none absolute inset-0 block">
+                          <span className="absolute left-0 right-0 top-1/2 h-[1.5px] -translate-y-1/2 rotate-[-14deg] bg-red-500/70" />
+                        </span>
+                      )}
+                    </button>
                   );
                 })}
               </div>
@@ -692,14 +814,35 @@ export default function ProductDetailClient({
               <div className="flex flex-wrap items-center gap-2">
                 {sizeAttr.values.map((v) => {
                   const active = selectedSizeId === v.id;
+                  // Size with zero stock for the current colour — still shown
+                  // so the shopper sees the full size run, but disabled with
+                  // a clear strike-through + diagonal red bar so it can't be
+                  // mistaken for an available size at a glance.
+                  const oos = stockForCandidate(sizeAttr.id, v.id) <= 0;
                   return (
                     <button
                       key={v.id}
                       type="button"
                       onClick={() => { setSelectedSizeId(v.id); setQtyError(""); }}
-                      className={`inline-flex h-[40px] min-w-[56px] cursor-pointer items-center justify-center rounded-[5px] border px-3 text-[13px] font-semibold transition-colors ${active ? "border-ink bg-ink text-white" : "border-[#d4d4d4] bg-white text-ink hover:border-ink"}`}
+                      disabled={oos}
+                      aria-disabled={oos}
+                      title={oos ? "Out of stock for this selection" : undefined}
+                      className={`relative inline-flex h-[40px] min-w-[56px] items-center justify-center rounded-[5px] border px-3 text-[13px] font-semibold overflow-hidden transition-colors ${
+                        active
+                          ? "border-ink bg-ink text-white"
+                          : oos
+                            ? "border-[#d4d4d4] bg-[#f6f6f8] text-[#9c9c9c] line-through cursor-not-allowed"
+                            : "border-[#d4d4d4] bg-white text-ink hover:border-ink cursor-pointer"
+                      }`}
                     >
-                      {v.value}
+                      <span className="relative z-10">{v.value}</span>
+                      {oos && (
+                        // Diagonal slash across the pill — universal "not
+                        // available" affordance, matches Amazon/Flipkart.
+                        <span aria-hidden className="pointer-events-none absolute inset-0">
+                          <span className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 rotate-[-18deg] bg-[#9c9c9c]" />
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -715,15 +858,51 @@ export default function ProductDetailClient({
             {product.brand_name && (
               <span>Brand: <span className="font-medium text-ink">{product.brand_name}</span></span>
             )}
-            {product.stock != null && (
-              <span>
-                Stock:{" "}
-                <span className={`font-medium ${product.stock > 0 ? "text-green-600" : "text-red-500"}`}>
-                  {product.stock > 0 ? `${product.stock} available` : "Out of stock"}
+            {product.stock != null && (() => {
+              // Prefer the matched variant's stock when the shopper has
+              // picked a complete combo — otherwise show the product rollup.
+              // Honours the same stock_type rules as the picker.
+              const variantResolved = exactVariantMatch ? readVariantStock(exactVariantMatch) : null;
+              const display = variantResolved != null && variantResolved !== Infinity
+                ? variantResolved
+                : Number(product.stock);
+              const inStock = variantResolved === Infinity || display > 0;
+              return (
+                <span>
+                  Stock:{" "}
+                  <span className={`font-medium ${inStock ? "text-green-600" : "text-red-500"}`}>
+                    {variantResolved === Infinity
+                      ? "Available"
+                      : inStock
+                        ? `${display} available`
+                        : "Out of stock"}
+                  </span>
                 </span>
-              </span>
-            )}
+              );
+            })()}
           </div>
+
+          {/* Urgency badge — Amazon/Flipkart-style "Only N left in stock —
+              order soon!" nudge. Driven by the admin-configured
+              `low_stock_limit` and the resolved variant (or product) stock. */}
+          {(() => {
+            const limit = Number(product.low_stock_limit) || 0;
+            if (!limit) return null;
+            const variantResolved = exactVariantMatch ? readVariantStock(exactVariantMatch) : null;
+            if (variantResolved === Infinity) return null;
+            const stock = variantResolved != null
+              ? variantResolved
+              : product.stock != null ? Number(product.stock) : 0;
+            if (stock <= 0 || stock > limit) return null;
+            return (
+              <div className="inline-flex w-fit items-center gap-2 rounded-[6px] bg-[#FFF7ED] px-3 py-1.5 text-[12.5px] font-semibold text-[#9A3412]">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
+                </svg>
+                Only {stock} left in stock — order soon!
+              </div>
+            );
+          })()}
 
           {/* Quantity */}
           <div>
@@ -733,7 +912,7 @@ export default function ProductDetailClient({
             <div className="inline-flex h-[44px] items-center rounded-[8px] border border-[#e7e7e7] bg-[#fdfdfd]">
               <button
                 onClick={decQty}
-                disabled={isOutOfStock || qty - stepSize < minQty}
+                disabled={isOutOfStock || selectedComboOutOfStock || qty - stepSize < minQty}
                 className="flex h-full w-[44px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-l-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <MinusIcon className="h-4 w-4" />
@@ -743,7 +922,7 @@ export default function ProductDetailClient({
               </span>
               <button
                 onClick={incQty}
-                disabled={isOutOfStock || qty + stepSize > maxQty}
+                disabled={isOutOfStock || selectedComboOutOfStock || qty + stepSize > maxQty}
                 className="flex h-full w-[44px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-r-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus className="h-4 w-4" />
@@ -766,14 +945,14 @@ export default function ProductDetailClient({
           <div className="flex gap-4">
             <button
               onClick={handleAddToCart}
-              disabled={product.stock === 0}
+              disabled={product.stock === 0 || selectedComboOutOfStock}
               className="inline-flex h-[64px] flex-1 cursor-pointer items-center justify-center rounded-[8px] border border-ink bg-white text-[16px] font-medium text-ink hover:bg-[#fafafa] disabled:opacity-50"
             >
-              {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
+              {product.stock === 0 || selectedComboOutOfStock ? "Out of Stock" : "Add to Cart"}
             </button>
             <button
               onClick={handleBuyNow}
-              disabled={product.stock === 0}
+              disabled={product.stock === 0 || selectedComboOutOfStock}
               className="inline-flex h-[64px] flex-1 cursor-pointer items-center justify-center rounded-[8px] bg-ink text-[16px] font-medium text-white hover:bg-black disabled:opacity-50"
             >
               Buy Now

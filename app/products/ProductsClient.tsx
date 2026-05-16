@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { IoCart } from "react-icons/io5";
 import ProductImage from "../components/ProductImage";
-import { type Product, type CategoryTab, type SiteSettings, imgUrl } from "@/lib/api";
+import { type Product, type CategoryTab, type SiteSettings, type Brand, imgUrl } from "@/lib/api";
 import { Star } from "../components/icons";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -37,6 +38,8 @@ export default function ProductsClient({
   q,
   categoryId,
   settings,
+  brands = [],
+  filters: serverFilters,
 }: {
   products: Product[];
   categoryTabs: CategoryTab[];
@@ -44,14 +47,76 @@ export default function ProductsClient({
   q?: string;
   categoryId?: string;
   settings: SiteSettings;
+  brands?: Brand[];
+  filters?: {
+    brandId?: string;
+    priceMin?: string;
+    priceMax?: string;
+    inStock?: string;
+    sort?: string;
+  };
 }) {
-  const [priceMin, setPriceMin] = useState(0);
-  const [priceMax, setPriceMax] = useState(10000);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Updates the URL with a patched set of query params and lets the server
+  // re-render the page with the new filtered product list. Skips routing
+  // when the patched value matches the existing one to avoid no-op pushes.
+  // Empty string / null clears the param.
+  function setUrl(patch: Record<string, string | null | undefined>) {
+    const sp = new URLSearchParams(searchParams?.toString() || '');
+    let changed = false;
+    for (const [k, v] of Object.entries(patch)) {
+      const next = v == null || v === '' ? null : String(v);
+      const prev = sp.get(k);
+      if (next === prev) continue;
+      if (next == null) sp.delete(k); else sp.set(k, next);
+      changed = true;
+    }
+    if (!changed) return;
+    const qs = sp.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  // Slider thumbs maintain their own local state during drag so the URL
+  // doesn't churn 40 times per drag. We commit to the URL once on release
+  // (debounced via the timer in the effect below).
+  const initialMin = Number(serverFilters?.priceMin) || 0;
+  const initialMax = Number(serverFilters?.priceMax) || 10000;
+  const [priceMin, setPriceMin] = useState<number>(initialMin);
+  const [priceMax, setPriceMax] = useState<number>(initialMax);
+  // Keep local sliders in sync if the URL changes externally (back/forward).
+  useEffect(() => {
+    setPriceMin(Number(serverFilters?.priceMin) || 0);
+    setPriceMax(Number(serverFilters?.priceMax) || 10000);
+  }, [serverFilters?.priceMin, serverFilters?.priceMax]);
+
+  // Debounce slider → URL commits. Ignores the first run after mount so we
+  // don't redundantly push the same values we just received from the server.
+  const skipFirstPriceCommit = useRef(true);
+  useEffect(() => {
+    if (skipFirstPriceCommit.current) { skipFirstPriceCommit.current = false; return; }
+    const t = setTimeout(() => {
+      setUrl({
+        price_min: priceMin > 0 ? String(priceMin) : null,
+        price_max: priceMax < 10000 ? String(priceMax) : null,
+      });
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [priceMin, priceMax]);
+
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  // Color and condition filters are still client-side (backend doesn't index
+  // them yet) — they post-filter whatever the server returned.
   const [colorFilter, setColorFilter] = useState<Set<string>>(new Set());
   const [conditionFilter, setConditionFilter] = useState<Set<string>>(new Set());
   const [showCount, setShowCount] = useState<10 | 20 | 50 | 100>(50);
-  const [sortBy, setSortBy] = useState<"featured" | "price-low" | "price-high" | "rating">("featured");
+  // Sort + in-stock + brand are URL-driven so they survive refresh / share.
+  const sortBy = (serverFilters?.sort || 'newest') as 'newest' | 'oldest' | 'price-low' | 'price-high' | 'rating' | 'popularity';
+  const brandId = serverFilters?.brandId || '';
+  const inStockOnly = String(serverFilters?.inStock) === '1';
 
   const baseParams = useMemo(() => {
     const p = new URLSearchParams();
@@ -83,14 +148,11 @@ export default function ProductsClient({
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [products]);
 
+  // Server already filtered by price / brand / in-stock / sort and returned
+  // products in the requested order. We just post-filter for the things the
+  // backend doesn't index (colour, condition) and cap the visible count.
   const filteredAndSorted = useMemo(() => {
     let list = [...products];
-    if (priceMin > 0 || priceMax < 10000) {
-      list = list.filter((p) => {
-        const price = Number(p.special_price ?? 0) || Number(p.price ?? 0);
-        return price >= priceMin && price <= priceMax;
-      });
-    }
     if (colorFilter.size > 0) {
       list = list.filter((p) => {
         const colors = (p as Product & { colors?: { value: string }[] }).colors || [];
@@ -98,27 +160,13 @@ export default function ProductsClient({
       });
     }
     if (conditionFilter.size > 0) {
-      // Schema has no condition column yet, so we treat every product as "New"
-      // by default. Filtering only matches when the buyer's selected set
-      // contains the product's effective condition.
       list = list.filter((p) => {
         const cond = (p as Product & { condition?: string }).condition || "New";
         return conditionFilter.has(cond);
       });
     }
-    switch (sortBy) {
-      case "price-low":
-        list.sort((a, b) => (Number(a.special_price || a.price || 0)) - (Number(b.special_price || b.price || 0)));
-        break;
-      case "price-high":
-        list.sort((a, b) => (Number(b.special_price || b.price || 0)) - (Number(a.special_price || a.price || 0)));
-        break;
-      case "rating":
-        list.sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
-        break;
-    }
     return list.slice(0, showCount);
-  }, [products, priceMax, colorFilter, sortBy, showCount]);
+  }, [products, colorFilter, conditionFilter, showCount]);
 
   const avatars = [
     settings.products_avatar_1,
@@ -426,17 +474,26 @@ export default function ProductsClient({
               <path d="M6 12h12" />
               <path d="M9 18h6" />
             </svg>
-            <span>Sort by: {sortBy === "featured" ? "Featured" : sortBy === "price-low" ? "Price ↑" : sortBy === "price-high" ? "Price ↓" : "Rating"}</span>
+            <span>Sort by: {
+              sortBy === "newest" ? "Newest" :
+              sortBy === "oldest" ? "Oldest" :
+              sortBy === "price-low" ? "Price ↑" :
+              sortBy === "price-high" ? "Price ↓" :
+              sortBy === "popularity" ? "Popularity" :
+              sortBy === "rating" ? "Rating" : "Newest"
+            }</span>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              onChange={(e) => setUrl({ sort: e.target.value === 'newest' ? null : e.target.value })}
               className="absolute inset-0 cursor-pointer opacity-0"
               aria-label="Sort by"
             >
-              <option value="featured">Sort by: Featured</option>
+              <option value="newest">Sort by: Newest</option>
+              <option value="oldest">Sort by: Oldest</option>
+              <option value="popularity">Sort by: Popularity</option>
+              <option value="rating">Sort by: Rating</option>
               <option value="price-low">Sort by: Price (Low to High)</option>
               <option value="price-high">Sort by: Price (High to Low)</option>
-              <option value="rating">Sort by: Rating</option>
             </select>
             <svg className="absolute right-3 h-3.5 w-3.5 text-[#525151] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
           </label>
@@ -580,17 +637,26 @@ export default function ProductsClient({
                     <path d="M4 8h8" />
                     <path d="M6 12h4" />
                   </svg>
-                  <span className="truncate">{sortBy === "featured" ? "Featured" : sortBy === "price-low" ? "Price ↑" : sortBy === "price-high" ? "Price ↓" : "Rating"}</span>
+                  <span className="truncate">{
+                    sortBy === "newest" ? "Newest" :
+                    sortBy === "oldest" ? "Oldest" :
+                    sortBy === "price-low" ? "Price ↑" :
+                    sortBy === "price-high" ? "Price ↓" :
+                    sortBy === "popularity" ? "Popularity" :
+                    sortBy === "rating" ? "Rating" : "Newest"
+                  }</span>
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    onChange={(e) => setUrl({ sort: e.target.value === 'newest' ? null : e.target.value })}
                     className="absolute inset-0 cursor-pointer opacity-0"
                     aria-label="Sort by"
                   >
-                    <option value="featured">Sort by: Featured</option>
+                    <option value="newest">Sort by: Newest</option>
+                    <option value="oldest">Sort by: Oldest</option>
+                    <option value="popularity">Sort by: Popularity</option>
+                    <option value="rating">Sort by: Rating</option>
                     <option value="price-low">Sort by: Price (Low to High)</option>
                     <option value="price-high">Sort by: Price (High to Low)</option>
-                    <option value="rating">Sort by: Rating</option>
                   </select>
                   <svg className="absolute right-2 h-3 w-3 text-[#525151] pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
                 </label>
