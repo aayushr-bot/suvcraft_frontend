@@ -108,13 +108,19 @@ export default function CartPage() {
   const cartLineKey = items.map((i) => `${i.id}:${i.variant_id ?? 0}`).join(",");
   useEffect(() => {
     let cancelled = false;
-    items.forEach((item) => {
-      const k = lineKey(item);
-      fetch(`${API}/api/v1/products/${item.id}`, { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (cancelled || !j?.data) return;
-          const p = j.data;
+    const uniqueIds = Array.from(new Set(items.map((i) => Number(i.id)).filter(Boolean)));
+    if (!uniqueIds.length) return;
+    fetch(`${API}/api/v1/products?ids=${uniqueIds.join(",")}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled || !j?.data?.rows) return;
+        const byId = new Map<number, any>(
+          (j.data.rows as any[]).map((p) => [Number(p.id), p]),
+        );
+        items.forEach((item) => {
+          const p = byId.get(Number(item.id));
+          if (!p) return;
+          const k = lineKey(item);
           const minQ = Math.max(1, Number(p.minimum_order_quantity) || 1);
           const stepQ = Math.max(1, Number(p.quantity_step_size) || 1);
           const stockCap = p.stock != null ? Number(p.stock) : Infinity;
@@ -145,9 +151,9 @@ export default function CartPage() {
           } else if (item.qty < minQ) {
             updateQty(k, minQ);
           }
-        })
-        .catch(() => {});
-    });
+        });
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -157,7 +163,16 @@ export default function CartPage() {
   function changeQty(item: typeof items[number], delta: number) {
     const k = lineKey(item);
     const minQ = item.minQty ?? 1;
-    const maxQ = item.maxQty ?? Infinity;
+    // For variant-wise products `item.maxQty` is undefined (the live cap lives
+    // per-variant) but the cart endpoint hands us `item.available_stock` based
+    // on the picked variant's stock. Take whichever cap is tighter so a +
+    // click can't push past either the per-order limit or the live variant
+    // stock.
+    const orderCap = item.maxQty ?? Infinity;
+    const stockCap = item.available_stock != null
+      ? Number(item.available_stock)
+      : (item.stock != null ? Number(item.stock) : Infinity);
+    const maxQ = Math.min(orderCap, stockCap);
     const step = item.step ?? 1;
     const next = item.qty + delta * step;
     // Minus on the last unit removes the line entirely instead of clamping at
@@ -172,7 +187,6 @@ export default function CartPage() {
       return;
     }
     if (delta > 0 && next > maxQ) {
-      const stockCap = item.stock != null ? Number(item.stock) : Infinity;
       const msg = stockCap === maxQ
         ? `Only ${maxQ} item${maxQ === 1 ? "" : "s"} available.`
         : `Maximum ${maxQ} unit${maxQ === 1 ? "" : "s"} per order.`;
@@ -405,7 +419,16 @@ export default function CartPage() {
                         <span className="text-[15px] font-bold">{String(item.qty).padStart(2, "0")}</span>
                         <button
                           onClick={() => changeQty(item, +1)}
-                          disabled={item.maxQty != null && item.qty + (item.step ?? 1) > item.maxQty}
+                          disabled={(() => {
+                            const nextQty = item.qty + (item.step ?? 1);
+                            const orderCap = item.maxQty;
+                            const stockCap = item.available_stock != null
+                              ? Number(item.available_stock)
+                              : (item.stock != null ? Number(item.stock) : null);
+                            if (orderCap != null && nextQty > orderCap) return true;
+                            if (stockCap != null && nextQty > stockCap) return true;
+                            return false;
+                          })()}
                           className="text-ink text-[20px] font-medium hover:text-brand-purple transition-colors leading-none disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           +

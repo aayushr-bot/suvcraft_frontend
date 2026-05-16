@@ -32,12 +32,17 @@ export type CartItem = {
 };
 
 type State = { items: CartItem[]; saved: CartItem[] };
+// UPDATE_LIMITS used to be just the quantity-related caps, but the server's
+// cart PUT/GET also hands back per-row availability flags (out_of_stock,
+// insufficient_stock, available_stock, availability). Widening to a generic
+// Partial<CartItem> lets the action carry both kinds of refresh without a
+// second action type.
 type Action =
   | { type: "INIT"; items: CartItem[]; saved: CartItem[] }
   | { type: "ADD"; item: Omit<CartItem, "qty">; qty: number }
   | { type: "REMOVE"; id: number }
   | { type: "SET_QTY"; id: number; qty: number }
-  | { type: "UPDATE_LIMITS"; id: number; limits: Partial<Pick<CartItem, "minQty" | "maxQty" | "step" | "stock" | "tax_percentage" | "is_prices_inclusive_tax" | "is_returnable">> }
+  | { type: "UPDATE_LIMITS"; id: number; limits: Partial<CartItem> }
   | { type: "MOVE_TO_SAVED"; id: number }
   | { type: "MOVE_TO_CART"; id: number }
   | { type: "REMOVE_SAVED"; id: number }
@@ -130,7 +135,7 @@ type CartContextType = {
   addToCart: (item: Omit<CartItem, "qty">, qty?: number) => void;
   removeFromCart: (id: number) => void;
   updateQty: (id: number, qty: number) => void;
-  updateLimits: (id: number, limits: Partial<Pick<CartItem, "minQty" | "maxQty" | "step" | "stock" | "tax_percentage" | "is_prices_inclusive_tax" | "is_returnable">>) => void;
+  updateLimits: (id: number, limits: Partial<CartItem>) => void;
   moveToSaved: (id: number) => void;
   moveToCart: (id: number) => void;
   removeFromSaved: (id: number) => void;
@@ -321,7 +326,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ items: payload }),
-      }).catch(() => {});
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          // The PUT endpoint re-runs listCart server-side and hands back fresh
+          // availability flags (out_of_stock / insufficient_stock / available_stock).
+          // Apply them per row so the "Only N left" banner and Place Order disable
+          // react to qty edits without waiting for a page refresh.
+          const fresh: CartItem[] = j?.data?.items || [];
+          if (!fresh.length) return;
+          skipNextSync.current = true;
+          for (const it of fresh) {
+            dispatch({
+              type: "UPDATE_LIMITS",
+              id: lineKey(it),
+              limits: {
+                stock: it.stock,
+                available_stock: it.available_stock,
+                availability: it.availability,
+                out_of_stock: it.out_of_stock,
+                insufficient_stock: it.insufficient_stock,
+                low_stock: it.low_stock,
+              },
+            });
+          }
+        })
+        .catch(() => {});
     } else {
       writeLocal(state.items);
     }

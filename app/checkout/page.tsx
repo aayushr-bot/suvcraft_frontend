@@ -72,28 +72,34 @@ export default function CheckoutPage() {
 
   // Pull rating + MRP per cart item — CartItem only carries the selling price,
   // and we need the original (pre-discount) price to populate "Total MRP".
+  // Batch the fetch with ?ids= so a 10-item cart hits the API once, not 10×.
+  const checkoutLineKey = items.map((i) => i.id).join(",");
   useEffect(() => {
     let cancelled = false;
-    items.forEach((item) => {
-      if (productInfo[item.id]) return;
-      fetch(`${API}/api/v1/products/${item.id}`, { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((j) => {
-          if (cancelled || !j?.data) return;
-          const p = j.data;
+    const missing = Array.from(
+      new Set(items.map((i) => Number(i.id)).filter((id) => id && !productInfo[id])),
+    );
+    if (!missing.length) return;
+    fetch(`${API}/api/v1/products?ids=${missing.join(",")}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled || !j?.data?.rows) return;
+        const next: Record<number, { rating?: number; mrp?: number }> = {};
+        for (const p of j.data.rows as any[]) {
           const price = Number(p.price ?? 0);
           const special = Number(p.special_price ?? 0);
           const mrp = special && price && special < price ? price : price || special;
-          setProductInfo((prev) => ({
-            ...prev,
-            [item.id]: { rating: Number(p.rating) || undefined, mrp: mrp || undefined },
-          }));
-        })
-        .catch(() => {});
-    });
+          next[Number(p.id)] = {
+            rating: Number(p.rating) || undefined,
+            mrp: mrp || undefined,
+          };
+        }
+        setProductInfo((prev) => ({ ...prev, ...next }));
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [checkoutLineKey]);
 
   const totalMrp = items.reduce((sum, it) => sum + (productInfo[it.id]?.mrp ?? it.price) * it.qty, 0);
 

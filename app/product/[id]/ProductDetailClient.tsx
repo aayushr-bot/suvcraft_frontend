@@ -17,7 +17,7 @@ import { IoMdHeartEmpty } from "react-icons/io";
 import { IoCart } from "react-icons/io5";
 import { SlLike, SlDislike } from "react-icons/sl";
 import { type ProductDetail, type Product, type ProductRating, type RatingSummary, imgUrl } from "@/lib/api";
-import { useCart } from "@/lib/cartContext";
+import { useCart, lineKey } from "@/lib/cartContext";
 import { useWishlist } from "@/lib/wishlistContext";
 import ProductImage from "../../components/ProductImage";
 import AuthModal from "../../components/AuthModal";
@@ -148,14 +148,14 @@ export default function ProductDetailClient({
 
   const minQty = Math.max(1, Number(product.minimum_order_quantity) || 1);
   const stepSize = Math.max(1, Number(product.quantity_step_size) || 1);
-  const stockCap = product.stock != null ? Number(product.stock) : Infinity;
   const allowedCap = product.total_allowed_quantity != null
     ? Number(product.total_allowed_quantity)
     : Infinity;
-  const maxQty = Math.min(stockCap, allowedCap);
-  const isOutOfStock = product.stock === 0 || maxQty < minQty;
+  // `stockCap`, `maxQty`, and `isOutOfStock` depend on the matched variant
+  // (variant-wise products) and are derived further down, after the variant
+  // resolution block.
 
-  const { addToCart } = useCart();
+  const { addToCart, items: cartItems, updateQty } = useCart();
   const relatedScrollRef = useRef<HTMLDivElement>(null);
   const [relatedHasOverflow, setRelatedHasOverflow] = useState(false);
   const popularScrollRef = useRef<HTMLDivElement>(null);
@@ -310,6 +310,20 @@ export default function ProductDetailClient({
     if (v.stock != null) return Number(v.stock);
     return isVariantStock ? 0 : Infinity;
   }
+
+  // Variant-aware stock cap. For variant-wise products `product.stock` is
+  // usually null (the real numbers live per-variant), so falling back to it
+  // would let the qty input rise past what's actually in stock for the picked
+  // combo. Use the matched variant's stock when we have it; otherwise fall
+  // back to the product-level value with the same null→Infinity guard as
+  // before.
+  const stockCap = (() => {
+    if (isUnlimitedStock) return Infinity;
+    if (matchedVariant) return readVariantStock(matchedVariant);
+    return product.stock != null ? Number(product.stock) : Infinity;
+  })();
+  const maxQty = Math.min(stockCap, allowedCap);
+  const isOutOfStock = stockCap === 0 || maxQty < minQty;
 
   // True only when the user has picked a complete combo (every attribute set)
   // AND the matched variant resolves to zero stock. Used to disable the Add
@@ -558,26 +572,36 @@ export default function ProductDetailClient({
       setShowAuth(true);
       return;
     }
-    addToCart(
-      {
-        id: product.id,
-        name: product.name,
-        image: images[0],
-        price: current,
-        minQty,
-        maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
-        step: stepSize,
-        stock: product.stock,
-        tax_percentage: Number(product.tax_percentage || 0),
-        is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
-        size: selectedSize?.value,
-        color: selectedColor
-          ? { name: selectedColor.value, swatch: String(selectedColor.swatche_value || "").trim() || undefined }
-          : undefined,
-        variant_id: matchedVariant?.id,
-      },
-      qty,
-    );
+    // Buy Now should land the buyer at checkout with EXACTLY the qty they
+    // picked on this page — not that qty added on top of whatever was already
+    // in the cart. addToCart sums onto an existing line; for an already-in-cart
+    // variant we use updateQty to set it directly.
+    const k = lineKey({ id: product.id, variant_id: matchedVariant?.id });
+    const existing = cartItems.find((i) => lineKey(i) === k);
+    if (existing) {
+      updateQty(k, qty);
+    } else {
+      addToCart(
+        {
+          id: product.id,
+          name: product.name,
+          image: images[0],
+          price: current,
+          minQty,
+          maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
+          step: stepSize,
+          stock: product.stock,
+          tax_percentage: Number(product.tax_percentage || 0),
+          is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
+          size: selectedSize?.value,
+          color: selectedColor
+            ? { name: selectedColor.value, swatch: String(selectedColor.swatche_value || "").trim() || undefined }
+            : undefined,
+          variant_id: matchedVariant?.id,
+        },
+        qty,
+      );
+    }
     window.location.href = `${BASE}/checkout`;
   };
 
@@ -1702,26 +1726,35 @@ export default function ProductDetailClient({
         onSuccess={() => {
           setIsAuthed(true);
           setShowAuth(false);
-          addToCart(
-      {
-        id: product.id,
-        name: product.name,
-        image: images[0],
-        price: current,
-        minQty,
-        maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
-        step: stepSize,
-        stock: product.stock,
-        tax_percentage: Number(product.tax_percentage || 0),
-        is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
-        size: selectedSize?.value,
-        color: selectedColor
-          ? { name: selectedColor.value, swatch: String(selectedColor.swatche_value || "").trim() || undefined }
-          : undefined,
-        variant_id: matchedVariant?.id,
-      },
-      qty,
-    );
+          // Post-login Buy Now path: same set-not-stack semantics as the
+          // primary handleBuyNow above. Without this, signing in mid-Buy-Now
+          // for a product already in cart would also double its qty.
+          const k = lineKey({ id: product.id, variant_id: matchedVariant?.id });
+          const existing = cartItems.find((i) => lineKey(i) === k);
+          if (existing) {
+            updateQty(k, qty);
+          } else {
+            addToCart(
+              {
+                id: product.id,
+                name: product.name,
+                image: images[0],
+                price: current,
+                minQty,
+                maxQty: Number.isFinite(maxQty) ? (maxQty as number) : undefined,
+                step: stepSize,
+                stock: product.stock,
+                tax_percentage: Number(product.tax_percentage || 0),
+                is_prices_inclusive_tax: Number(product.is_prices_inclusive_tax || 0),
+                size: selectedSize?.value,
+                color: selectedColor
+                  ? { name: selectedColor.value, swatch: String(selectedColor.swatche_value || "").trim() || undefined }
+                  : undefined,
+                variant_id: matchedVariant?.id,
+              },
+              qty,
+            );
+          }
           window.location.href = `${BASE}/checkout`;
         }}
       />
