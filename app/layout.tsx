@@ -7,6 +7,7 @@ import FeatureStrip from "./components/FeatureStrip";
 import { api, imgUrl, type SiteSettings } from "@/lib/api";
 import { CartProvider } from "@/lib/cartContext";
 import { WishlistProvider } from "@/lib/wishlistContext";
+import CsrfBootstrap from "./components/CsrfBootstrap";
 
 function resolveAsset(path?: string): string {
   if (!path) return "";
@@ -68,6 +69,7 @@ export default async function RootLayout({
       className={`${instrumentSans.variable} ${harmattan.variable} ${brunoAceSC.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <CsrfBootstrap />
         <CartProvider>
           <WishlistProvider>
             <Navbar categories={navCategories} logo={headerLogo} siteTitle={siteTitle} />
