@@ -5,6 +5,7 @@ import { MinusIcon, Plus } from "./icons";
 import ProductImage from "./ProductImage";
 import { api, imgUrl, type ProductDetail } from "@/lib/api";
 import { useCart, lineKey } from "@/lib/cartContext";
+import { formatMoney } from "@/lib/format";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -19,7 +20,7 @@ function resolveImg(path: string): string {
 }
 
 function fmt(n: number) {
-  return n ? `₹${n.toLocaleString("en-IN")}` : "—";
+  return n ? formatMoney(n) : "—";
 }
 
 export default function QuickAddModal({

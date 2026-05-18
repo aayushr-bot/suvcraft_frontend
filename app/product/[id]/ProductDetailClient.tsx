@@ -21,6 +21,7 @@ import { useCart, lineKey } from "@/lib/cartContext";
 import { useWishlist } from "@/lib/wishlistContext";
 import ProductImage from "../../components/ProductImage";
 import AuthModal from "../../components/AuthModal";
+import { formatMoney } from "@/lib/format";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -59,7 +60,7 @@ function getPrice(p: ProductDetail) {
 }
 
 function fmt(n: number) {
-  return n ? `₹${n.toLocaleString("en-IN")}` : "—";
+  return n ? formatMoney(n) : "—";
 }
 
 function getCardImg(p: Product) {
@@ -684,6 +685,14 @@ export default function ProductDetailClient({
                 Trusted Seller
               </div>
               <ProductImage src={activeImg} alt={product.name} className="h-[95%] w-[95%] object-contain" />
+              {/* When the product has no images we fall back to the
+                  placeholder svg — caption it so the buyer doesn't think
+                  the page failed to load. */}
+              {activeImg === PLACEHOLDER_IMG && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white/80 px-3 py-1 text-[11px] font-medium text-[#525151] backdrop-blur">
+                  Photo coming soon
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-4 pt-2">

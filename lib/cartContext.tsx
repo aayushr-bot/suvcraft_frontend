@@ -213,9 +213,19 @@ function mergeItems(local: CartItem[], remote: CartItem[]): CartItem[] {
   for (const it of local) {
     const k = lineKey(it);
     const cur = byKey.get(k);
-    // Preserve server-side metadata (variant_id, size, color) when present;
-    // local just contributes max qty for that line.
-    byKey.set(k, cur ? { ...cur, qty: Math.max(cur.qty, it.qty) } : it);
+    // Preserve server-side metadata (variant_id, size, color, maxQty,
+    // tax flags …) when present; combine quantities the way Amazon does —
+    // sum local + remote, then cap at the line's known max (per-order limit
+    // or stock). The cart page's refetch pass later re-caps against the
+    // *live* server values, so this is best-effort at merge time.
+    if (cur) {
+      const cap = cur.maxQty ?? it.maxQty;
+      const summed = cur.qty + it.qty;
+      const next = cap != null ? Math.min(summed, cap) : summed;
+      byKey.set(k, { ...cur, qty: next });
+    } else {
+      byKey.set(k, it);
+    }
   }
   return [...byKey.values()];
 }
