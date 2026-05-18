@@ -75,15 +75,23 @@ function reducer(state: State, action: Action): State {
     case "ADD": {
       const k = lineKey(action.item);
       const existing = state.items.find((i) => lineKey(i) === k);
+      // Belt-and-suspenders: cap qty at the line's known maxQty (stock or
+      // per-order limit) when the caller supplied one. The PDP already
+      // pre-checks, but this stops a buggy caller from pushing the line
+      // past available stock.
+      const cap = action.item.maxQty ?? existing?.maxQty;
       if (existing) {
+        const next = existing.qty + action.qty;
+        const clamped = cap != null ? Math.min(next, cap) : next;
         return {
           ...state,
           items: state.items.map((i) =>
-            lineKey(i) === k ? { ...i, ...action.item, qty: i.qty + action.qty } : i
+            lineKey(i) === k ? { ...i, ...action.item, qty: clamped } : i
           ),
         };
       }
-      return { ...state, items: [...state.items, { ...action.item, qty: action.qty }] };
+      const startQty = cap != null ? Math.min(action.qty, cap) : action.qty;
+      return { ...state, items: [...state.items, { ...action.item, qty: startQty }] };
     }
     case "REMOVE":
       return { ...state, items: state.items.filter((i) => lineKey(i) !== action.id) };

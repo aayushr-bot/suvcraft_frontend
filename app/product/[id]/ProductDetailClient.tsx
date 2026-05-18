@@ -332,6 +332,19 @@ export default function ProductDetailClient({
   const selectedComboOutOfStock =
     exactVariantMatch != null && readVariantStock(exactVariantMatch) <= 0;
 
+  // How many of THIS product+variant line are already sitting in the cart.
+  // The stock cap is global — what the buyer can add here must respect what
+  // they've already accumulated. Without this, clicking "Add to Cart" twice
+  // when stock = 1 would push the cart line to qty 2 (Amazon/Flipkart parity).
+  const existingCartQty = (() => {
+    const k = lineKey({ id: product.id, variant_id: matchedVariant?.id });
+    return cartItems.find((i) => lineKey(i) === k)?.qty ?? 0;
+  })();
+  const remainingStock = Number.isFinite(maxQty)
+    ? Math.max(0, (maxQty as number) - existingCartQty)
+    : Infinity;
+  const atCartCap = !isOutOfStock && !selectedComboOutOfStock && remainingStock < minQty;
+
   // One-shot dev console snapshot so we can confirm what variants[] looks
   // like when the OOS picker logic doesn't seem to apply. Logs only in the
   // browser, only in dev, and only once per mount.
@@ -467,6 +480,22 @@ export default function ProductDetailClient({
       setQtyError(limitMsg());
       return;
     }
+    // Enforce stock cap across the cart, not just this click. If the buyer
+    // already has the line in their cart, the new total must still fit
+    // within stock. Mirrors Amazon/Flipkart — you can't push a line past
+    // available stock by repeatedly clicking Add to Cart.
+    if (existingCartQty + qty > maxQty) {
+      if (existingCartQty >= maxQty) {
+        setQtyError(
+          `You already have ${existingCartQty} in your cart — no more available.`,
+        );
+      } else {
+        setQtyError(
+          `Only ${remainingStock} more can be added — you already have ${existingCartQty} in your cart.`,
+        );
+      }
+      return;
+    }
     setQtyError("");
     addToCart(
       {
@@ -503,6 +532,15 @@ export default function ProductDetailClient({
   const incQty = () => {
     if (qty + stepSize > maxQty) {
       setQtyError(limitMsg());
+      return;
+    }
+    // Also stop the picker once we've reached what can still be added on top
+    // of what's already in the cart. Without this the stepper could rise to
+    // stock=N but `handleAddToCart` would then reject the click — confusing.
+    if (qty + stepSize > remainingStock) {
+      setQtyError(
+        `Only ${remainingStock} more can be added — you already have ${existingCartQty} in your cart.`,
+      );
       return;
     }
     setQtyError("");
@@ -946,13 +984,25 @@ export default function ProductDetailClient({
               </span>
               <button
                 onClick={incQty}
-                disabled={isOutOfStock || selectedComboOutOfStock || qty + stepSize > maxQty}
+                disabled={
+                  isOutOfStock ||
+                  selectedComboOutOfStock ||
+                  atCartCap ||
+                  qty + stepSize > maxQty ||
+                  qty + stepSize > remainingStock
+                }
                 className="flex h-full w-[44px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-r-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus className="h-4 w-4" />
               </button>
             </div>
-            {(minQty > 1 || allowedCap !== Infinity) && !qtyError && (
+            {existingCartQty > 0 && !qtyError && (
+              <p className="mt-2 text-[12px] text-[#8c8c8c]">
+                You already have {existingCartQty} of this item in your cart.
+                {Number.isFinite(remainingStock) && remainingStock > 0 && ` Only ${remainingStock} more can be added.`}
+              </p>
+            )}
+            {(minQty > 1 || allowedCap !== Infinity) && !qtyError && existingCartQty === 0 && (
               <p className="mt-2 text-[12px] text-[#8c8c8c]">
                 {minQty > 1 && `Min order: ${minQty}`}
                 {minQty > 1 && allowedCap !== Infinity && " · "}
@@ -968,11 +1018,21 @@ export default function ProductDetailClient({
 
           <div className="flex gap-4">
             <button
-              onClick={handleAddToCart}
+              onClick={() => {
+                if (atCartCap) {
+                  window.location.href = `${BASE}/cart`;
+                  return;
+                }
+                handleAddToCart();
+              }}
               disabled={product.stock === 0 || selectedComboOutOfStock}
               className="inline-flex h-[64px] flex-1 cursor-pointer items-center justify-center rounded-[8px] border border-ink bg-white text-[16px] font-medium text-ink hover:bg-[#fafafa] disabled:opacity-50"
             >
-              {product.stock === 0 || selectedComboOutOfStock ? "Out of Stock" : "Add to Cart"}
+              {product.stock === 0 || selectedComboOutOfStock
+                ? "Out of Stock"
+                : atCartCap
+                  ? "Go to Cart"
+                  : "Add to Cart"}
             </button>
             <button
               onClick={handleBuyNow}

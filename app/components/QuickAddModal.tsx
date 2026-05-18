@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { MinusIcon, Plus } from "./icons";
 import ProductImage from "./ProductImage";
 import { api, imgUrl, type ProductDetail } from "@/lib/api";
-import { useCart } from "@/lib/cartContext";
+import { useCart, lineKey } from "@/lib/cartContext";
+
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 
@@ -31,7 +33,7 @@ export default function QuickAddModal({
   onClose: () => void;
   onAdded: (msg: string) => void;
 }) {
-  const { addToCart } = useCart();
+  const { addToCart, items: cartItems } = useCart();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
@@ -168,12 +170,32 @@ export default function QuickAddModal({
 
   const minQty = Math.max(1, Number(product?.minimum_order_quantity) || 1);
   const stepSize = Math.max(1, Number(product?.quantity_step_size) || 1);
-  const stockCap = product?.stock != null ? Number(product.stock) : Infinity;
+  // Variant-aware stock cap (mirrors the PDP). For variant-wise products
+  // `product.stock` is the rollup across all variants — using it here would
+  // let qty rise past what's actually in stock for the picked combo.
+  const stockCap = (() => {
+    if (isUnlimitedStock) return Infinity;
+    if (matchedVariant) return readVariantStock(matchedVariant);
+    return product?.stock != null ? Number(product.stock) : Infinity;
+  })();
   const allowedCap = product?.total_allowed_quantity != null
     ? Number(product.total_allowed_quantity)
     : Infinity;
   const maxQty = Math.min(stockCap, allowedCap);
-  const isOutOfStock = product?.stock === 0 || maxQty < minQty;
+  const isOutOfStock = stockCap === 0 || maxQty < minQty;
+
+  // How many of THIS product+variant line are already sitting in the cart.
+  // Without this check, clicking Add to Cart from the quick-add modal would
+  // accumulate past available stock (Amazon/Flipkart parity).
+  const existingCartQty = product
+    ? (cartItems.find(
+        (i) => lineKey(i) === lineKey({ id: product.id, variant_id: matchedVariant?.id }),
+      )?.qty ?? 0)
+    : 0;
+  const remainingStock = Number.isFinite(maxQty)
+    ? Math.max(0, (maxQty as number) - existingCartQty)
+    : Infinity;
+  const atCartCap = !isOutOfStock && !selectedComboOutOfStock && remainingStock < minQty;
 
   const decQty = () => {
     if (qty - stepSize < minQty) return;
@@ -182,6 +204,15 @@ export default function QuickAddModal({
   };
   const incQty = () => {
     if (qty + stepSize > maxQty) return;
+    // Also stop once we've reached what can still be added on top of what's
+    // already in the cart — otherwise the stepper rises and then Add to Cart
+    // rejects the click.
+    if (qty + stepSize > remainingStock) {
+      setErrMsg(
+        `Only ${remainingStock} more can be added — you already have ${existingCartQty} in your cart.`,
+      );
+      return;
+    }
     setQty(qty + stepSize);
     setErrMsg("");
   };
@@ -196,6 +227,20 @@ export default function QuickAddModal({
     }
     if (sizeAttr && sizeAttr.values.length > 0 && !selectedSizeId) {
       setErrMsg(`Please select a ${sizeAttr.name.toLowerCase()}.`);
+      return;
+    }
+    // Enforce stock cap across the cart, not just this click — same rule as
+    // the full PDP. Clicking Add to Cart can't push the line past stock.
+    if (existingCartQty + qty > maxQty) {
+      if (existingCartQty >= maxQty) {
+        setErrMsg(
+          `You already have ${existingCartQty} in your cart — no more available.`,
+        );
+      } else {
+        setErrMsg(
+          `Only ${remainingStock} more can be added — you already have ${existingCartQty} in your cart.`,
+        );
+      }
       return;
     }
     const pickedColor = colorAttr?.values.find((v) => v.id === selectedColorId);
@@ -367,12 +412,24 @@ export default function QuickAddModal({
                     </span>
                     <button
                       onClick={incQty}
-                      disabled={isOutOfStock || selectedComboOutOfStock || qty + stepSize > maxQty}
+                      disabled={
+                        isOutOfStock ||
+                        selectedComboOutOfStock ||
+                        atCartCap ||
+                        qty + stepSize > maxQty ||
+                        qty + stepSize > remainingStock
+                      }
                       className="flex h-full w-[40px] items-center justify-center text-[#8c8c8c] hover:text-ink rounded-r-[8px] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>
+                  {existingCartQty > 0 && !errMsg && (
+                    <p className="mt-2 text-[12px] text-[#8c8c8c]">
+                      You already have {existingCartQty} of this item in your cart.
+                      {Number.isFinite(remainingStock) && remainingStock > 0 && ` Only ${remainingStock} more can be added.`}
+                    </p>
+                  )}
                 </div>
 
                 {errMsg && (
@@ -386,11 +443,22 @@ export default function QuickAddModal({
             <div className="border-t border-[#eee] px-6 py-4">
               <button
                 type="button"
-                onClick={handleAdd}
+                onClick={() => {
+                  if (atCartCap) {
+                    onClose();
+                    window.location.href = `${BASE}/cart`;
+                    return;
+                  }
+                  handleAdd();
+                }}
                 disabled={isOutOfStock || selectedComboOutOfStock}
                 className="inline-flex h-[48px] w-full cursor-pointer items-center justify-center rounded-[8px] bg-ink text-[15px] font-medium text-white hover:bg-black disabled:opacity-50"
               >
-                {isOutOfStock || selectedComboOutOfStock ? "Out of Stock" : "Add to Cart"}
+                {isOutOfStock || selectedComboOutOfStock
+                  ? "Out of Stock"
+                  : atCartCap
+                    ? "Go to Cart"
+                    : "Add to Cart"}
               </button>
             </div>
           )}
