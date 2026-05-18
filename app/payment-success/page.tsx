@@ -6,12 +6,9 @@ import Link from "next/link";
 import { useCart } from "@/lib/cartContext";
 import { api, type SiteSettings } from "@/lib/api";
 import { CreditCardCheckIcon, ArrowLeftIcon } from "../components/icons";
+import { formatMoney as fmt } from "@/lib/format";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
-
-function fmt(n: number) {
-  return `₹${Number(n).toLocaleString("en-IN")}`;
-}
 
 type OrderInfo = {
   payment_method?: string;
@@ -54,6 +51,9 @@ function PaymentSuccessContent() {
   const [info, setInfo] = useState<OrderInfo | null>(null);
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [copied, setCopied] = useState(false);
+  // Picked up from sessionStorage if the payment page tried to save the card
+  // post-order and failed. Cleared after read so a refresh doesn't repeat it.
+  const [saveCardNotice, setSaveCardNotice] = useState("");
 
   useEffect(() => {
     clearCart();
@@ -66,6 +66,13 @@ function PaymentSuccessContent() {
     api.settings()
       .then((s) => setSettings(s as SiteSettings))
       .catch(() => {});
+    try {
+      const msg = sessionStorage.getItem("suvcraft_savecard_error");
+      if (msg) {
+        setSaveCardNotice(msg);
+        sessionStorage.removeItem("suvcraft_savecard_error");
+      }
+    } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -114,6 +121,19 @@ function PaymentSuccessContent() {
               SUVCRAFT
             </span>
           </div>
+
+          {/* Save-card failure carried over from the payment page. Shown
+              non-blockingly so the buyer knows the order is fine but the
+              card wasn't remembered for next time. */}
+          {saveCardNotice && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-4 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800"
+            >
+              {saveCardNotice}
+            </div>
+          )}
 
           {/* Status icon + heading */}
           <div className="flex flex-col items-center mb-5">

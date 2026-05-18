@@ -5,12 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/lib/cartContext";
 import type { Address } from "@/lib/api";
+import { formatMoney as fmt, formatMoney } from "@/lib/format";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
-
-function fmt(n: number) {
-  return `₹${n.toLocaleString("en-IN")}`;
-}
 
 const METHODS = [
   { id: "card", label: "Card" },
@@ -20,7 +17,7 @@ const METHODS = [
 ];
 
 function fmtAmt(n: number) {
-  return `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  return formatMoney(n, { maxFractionDigits: 2 });
 }
 
 export default function PaymentPage() {
@@ -176,6 +173,41 @@ export default function PaymentPage() {
         return;
       }
       if (json.error) { setError(json.message || "Order failed."); return; }
+
+      // Order placed — try to save the card if the buyer asked us to. This
+      // is a side benefit, so a failure here doesn't roll back the order;
+      // we just surface the reason inline so they know what happened.
+      if (saveCard && method === "card" && !walletCoversAll) {
+        try {
+          const [m, y] = cardExp.split("/").map((s) => s.trim());
+          const cardRes = await fetch(`${API}/api/v1/saved-cards`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              holder_name: address.name,
+              card_number: cardNo.replace(/\D/g, ""),
+              cvv: cardCvv,
+              exp_month: Number(m),
+              exp_year: y && y.length === 2 ? 2000 + Number(y) : Number(y),
+            }),
+          });
+          const cj = await cardRes.json().catch(() => null);
+          if (!cardRes.ok || cj?.error) {
+            // Bridge the reason to the success page so the buyer sees why
+            // their card wasn't remembered (we navigate immediately after
+            // this block, so a local banner wouldn't get a chance to show).
+            try {
+              sessionStorage.setItem(
+                "suvcraft_savecard_error",
+                cj?.message || "Could not save card for next time.",
+              );
+            } catch {}
+          }
+        } catch {
+          try { sessionStorage.setItem("suvcraft_savecard_error", "Could not save card for next time."); } catch {}
+        }
+      }
 
       clearCart();
       removeCoupon();

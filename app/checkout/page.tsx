@@ -7,13 +7,11 @@ import { useCart, lineKey } from "@/lib/cartContext";
 import { imgUrl, type Address } from "@/lib/api";
 import { Star } from "../components/icons";
 import ProductImage from "../components/ProductImage";
+import { formatMoney as fmt } from "@/lib/format";
+import { lookupPincode } from "@/lib/pincode";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
-
-function fmt(n: number) {
-  return `₹${n.toLocaleString("en-IN")}`;
-}
 
 function resolveImg(path: string) {
   if (!path) return PLACEHOLDER_IMG;
@@ -448,34 +446,34 @@ export default function CheckoutPage() {
               <div className="flex flex-col gap-3 text-[14px]">
                 <div className="flex justify-between">
                   <span className="text-[#525151]">Total MRP</span>
-                  <span className="text-ink font-medium">₹{totalMrp.toLocaleString("en-IN")}</span>
+                  <span className="text-ink font-medium">{fmt(totalMrp)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#525151]">Subtotal</span>
-                  <span className="text-emerald-600 font-semibold">₹{total.toLocaleString("en-IN")}</span>
+                  <span className="text-emerald-600 font-semibold">{fmt(total)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#525151]">Delivery Charge</span>
                   <span className={`font-medium ${deliveryCharge === 0 ? "text-emerald-600" : "text-ink"}`}>
-                    {deliveryCharge === 0 ? "FREE" : `₹${deliveryCharge.toLocaleString("en-IN")}`}
+                    {deliveryCharge === 0 ? "FREE" : fmt(deliveryCharge)}
                   </span>
                 </div>
                 {coupon && couponDiscount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-[#525151]">Coupon Discount</span>
-                    <span className="text-ink font-medium">-₹{couponDiscount.toLocaleString("en-IN")}</span>
+                    <span className="text-ink font-medium">-{fmt(couponDiscount)}</span>
                   </div>
                 )}
                 {taxTotal > 0 && (
                   <div className="flex justify-between">
                     <span className="text-[#525151]">Tax</span>
-                    <span className="text-ink font-medium">+₹{taxTotal.toLocaleString("en-IN")}</span>
+                    <span className="text-ink font-medium">+{fmt(taxTotal)}</span>
                   </div>
                 )}
                 <div className="my-1 border-t border-dashed border-[#e7e7e7]" />
                 <div className="flex justify-between items-baseline">
                   <span className="text-[14px] font-medium text-ink">Total</span>
-                  <span className="text-[14px] font-bold text-emerald-600">₹{finalTotal.toLocaleString("en-IN")}</span>
+                  <span className="text-[14px] font-bold text-emerald-600">{fmt(finalTotal)}</span>
                 </div>
               </div>
             </div>
@@ -517,21 +515,6 @@ export default function CheckoutPage() {
       </div>
     </div>
   );
-}
-
-async function lookupPincode(pin: string): Promise<{ city?: string; state?: string } | null> {
-  try {
-    const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
-    const data = await res.json();
-    const post = data?.[0]?.PostOffice?.[0];
-    if (!post) return null;
-    return {
-      city: String(post.District || "").trim() || undefined,
-      state: String(post.State || "").trim() || undefined,
-    };
-  } catch {
-    return null;
-  }
 }
 
 function AddressFormFields({ form, set }: { form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {

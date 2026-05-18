@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircleSolid } from "../components/icons";
 import type { Address } from "@/lib/api";
+import { lookupPincode } from "@/lib/pincode";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -39,21 +40,6 @@ function fromAddress(a: Address): FormState {
     state: a.state || "",
     type: a.type || "Home",
   };
-}
-
-async function lookupPincode(pin: string): Promise<{ city?: string; state?: string } | null> {
-  try {
-    const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
-    const data = await res.json();
-    const post = data?.[0]?.PostOffice?.[0];
-    if (!post) return null;
-    return {
-      city: String(post.District || "").trim() || undefined,
-      state: String(post.State || "").trim() || undefined,
-    };
-  } catch {
-    return null;
-  }
 }
 
 export default function AddressesPage() {
