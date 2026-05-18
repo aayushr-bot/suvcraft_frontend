@@ -47,6 +47,18 @@ export default function ProfilePage() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState("");
 
+  // Change-mobile flow (OTP). Three steps:
+  //   idle → asked (OTP sent, waiting for code) → success/error
+  // Kept inline rather than a modal so it sits in the natural place on
+  // the form and doesn't fight focus with the rest of the page.
+  const [showMobileChange, setShowMobileChange] = useState(false);
+  const [newMobile, setNewMobile] = useState("");
+  const [mobileOtp, setMobileOtp] = useState("");
+  const [mobileStep, setMobileStep] = useState<"idle" | "asked">("idle");
+  const [mobileBusy, setMobileBusy] = useState(false);
+  const [mobileError, setMobileError] = useState("");
+  const [mobileDevPreview, setMobileDevPreview] = useState("");
+
   // Toast
   const [toast, setToast] = useState("");
 
@@ -168,6 +180,61 @@ export default function ProfilePage() {
     }
   }
 
+  // ─── Change mobile flow ─────────────────────────────────────────
+  async function sendMobileOtp() {
+    setMobileError("");
+    setMobileDevPreview("");
+    const cleaned = newMobile.replace(/\D/g, "");
+    if (cleaned.length < 10) { setMobileError("Enter a valid 10-digit mobile number."); return; }
+    if (cleaned === user?.mobile) { setMobileError("That's already your current mobile."); return; }
+    setMobileBusy(true);
+    try {
+      const res = await fetch(`${API}/api/v1/auth/otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "change_mobile_send", new_mobile: cleaned }),
+      });
+      const j = await res.json();
+      if (j.error) { setMobileError(j.message || "Could not send OTP."); return; }
+      setMobileStep("asked");
+      if (j?.data?.otp_preview) setMobileDevPreview(String(j.data.otp_preview));
+    } catch {
+      setMobileError("Network error. Please try again.");
+    } finally {
+      setMobileBusy(false);
+    }
+  }
+
+  async function verifyMobileOtp() {
+    setMobileError("");
+    const cleaned = newMobile.replace(/\D/g, "");
+    const otpTrim = mobileOtp.trim();
+    if (!/^\d{6}$/.test(otpTrim)) { setMobileError("Enter the 6-digit OTP."); return; }
+    setMobileBusy(true);
+    try {
+      const res = await fetch(`${API}/api/v1/auth/otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "change_mobile_verify", new_mobile: cleaned, otp: otpTrim }),
+      });
+      const j = await res.json();
+      if (j.error) { setMobileError(j.message || "Could not verify OTP."); return; }
+      setUser((u) => (u ? { ...u, mobile: cleaned } : u));
+      setShowMobileChange(false);
+      setMobileStep("idle");
+      setNewMobile("");
+      setMobileOtp("");
+      setMobileDevPreview("");
+      flashToast("Mobile number updated.");
+    } catch {
+      setMobileError("Network error. Please try again.");
+    } finally {
+      setMobileBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-[1200px] px-4 py-20 md:px-8">
@@ -263,14 +330,111 @@ export default function ProfilePage() {
             </div>
             {user?.mobile && (
               <div>
-                <label className={labelCls}>Mobile</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={labelCls + " mb-0"}>Mobile</label>
+                  {!showMobileChange && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMobileChange(true);
+                        setMobileError("");
+                        setMobileStep("idle");
+                        setNewMobile("");
+                        setMobileOtp("");
+                      }}
+                      className="text-[12px] font-semibold text-brand-purple hover:underline"
+                    >
+                      Change
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={user.mobile}
                   readOnly
                   className={`${inputCls} bg-[#f9f9f9] text-[#878787]`}
                 />
-                <p className="mt-1 text-[11.5px] text-[#878787]">Mobile is verified — contact support to change it.</p>
+
+                {showMobileChange && (
+                  <div className="mt-3 rounded-[8px] border border-[#e7e7e7] bg-[#fafafa] p-4 flex flex-col gap-3">
+                    {mobileStep === "idle" ? (
+                      <>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={newMobile}
+                          onChange={(e) => setNewMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                          placeholder="New 10-digit mobile number"
+                          className={inputCls}
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={sendMobileOtp}
+                            disabled={mobileBusy || newMobile.length < 10}
+                            className="inline-flex h-[42px] items-center justify-center rounded-[8px] bg-ink-soft px-5 text-[13px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60"
+                          >
+                            {mobileBusy ? "Sending…" : "Send OTP"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setShowMobileChange(false); setMobileError(""); }}
+                            className="text-[13px] font-medium text-[#525151] hover:text-ink"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[12.5px] text-[#525151]">
+                          OTP sent to <span className="font-semibold text-ink">+91 {newMobile}</span>.
+                          {mobileDevPreview && (
+                            <span className="ml-2 inline-flex items-center rounded-[5px] bg-amber-50 px-2 py-0.5 text-amber-800">
+                              Dev OTP: <span className="ml-1 font-mono">{mobileDevPreview}</span>
+                            </span>
+                          )}
+                        </p>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={mobileOtp}
+                          onChange={(e) => setMobileOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          placeholder="Enter 6-digit OTP"
+                          className={inputCls}
+                          maxLength={6}
+                        />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={verifyMobileOtp}
+                            disabled={mobileBusy || mobileOtp.length !== 6}
+                            className="inline-flex h-[42px] items-center justify-center rounded-[8px] bg-ink-soft px-5 text-[13px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60"
+                          >
+                            {mobileBusy ? "Verifying…" : "Verify & Update"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setMobileStep("idle"); setMobileOtp(""); setMobileError(""); }}
+                            className="text-[13px] font-medium text-[#525151] hover:text-ink"
+                          >
+                            Change number
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setShowMobileChange(false); setMobileError(""); }}
+                            className="ml-auto text-[13px] font-medium text-[#525151] hover:text-ink"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    {mobileError && (
+                      <p className="text-[12.5px] font-medium text-red-600">{mobileError}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
