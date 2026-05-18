@@ -29,21 +29,21 @@ export default async function SearchPage({
   const resolved = await searchParams;
   const q = (resolved?.q ?? "").trim();
 
-  const data = q
-    ? await api.products({ per_page: 40, status: "1", search: q }).catch(() => ({ rows: [] }))
-    : { rows: [] };
+  // Fire both lookups in parallel so the empty-state recovery doesn't add a
+  // serialised round-trip to every search. The trending list is only used
+  // when the query is empty OR returns zero results — we still pay for it
+  // on every page load, but the request runs alongside the search instead
+  // of after it.
+  const [data, trendingData] = await Promise.all([
+    q
+      ? api.products({ per_page: 40, status: "1", search: q }).catch(() => ({ rows: [] }))
+      : Promise.resolve({ rows: [] }),
+    api.popularProducts({ limit: 10 }).catch(() => ({ rows: [] })),
+  ]);
 
   const products = (data as { rows: any[] }).rows ?? [];
-
-  // Trending products as a recovery affordance for empty results / empty
-  // search — matches Amazon/Flipkart's "you might also like" zero-state.
-  // Cheap (one extra API hit) and lets the buyer keep browsing without
-  // having to type a new query.
   const showTrending = !q || products.length === 0;
-  const trendingData = showTrending
-    ? await api.popularProducts({ limit: 10 }).catch(() => ({ rows: [] }))
-    : { rows: [] };
-  const trending = (trendingData as { rows: any[] }).rows ?? [];
+  const trending = showTrending ? ((trendingData as { rows: any[] }).rows ?? []) : [];
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 py-10 md:px-8 min-h-screen">

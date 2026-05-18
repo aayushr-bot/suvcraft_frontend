@@ -235,8 +235,11 @@ export default function CartPage() {
       // error string carries the threshold (e.g. "Minimum order amount for
       // this coupon is ₹999."). Pull it out and show a clearer hint with the
       // exact amount still needed — same affordance Amazon/Flipkart give.
+      // Anchor on the word "minimum" so a future error message that mentions
+      // two amounts (e.g. "Apply ₹50 off on min ₹999") doesn't pick the
+      // wrong one.
       const raw = r.error || "Could not apply coupon.";
-      const m = raw.match(/(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d+)?)/i);
+      const m = raw.match(/min(?:imum)?[^\d₹$]*(?:₹|Rs\.?|INR)?\s*([\d,]+(?:\.\d+)?)/i);
       if (m) {
         const min = Number(m[1].replace(/,/g, ""));
         if (Number.isFinite(min) && min > total) {

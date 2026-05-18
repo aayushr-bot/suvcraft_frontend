@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/lib/cartContext";
 import type { Address } from "@/lib/api";
-import { formatMoney as fmt, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
+const fmt = formatMoney;
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -177,32 +178,50 @@ export default function PaymentPage() {
       // Order placed — try to save the card if the buyer asked us to. This
       // is a side benefit, so a failure here doesn't roll back the order;
       // we just surface the reason inline so they know what happened.
+      //
+      // NOTE: card details are short-lived in JS memory until this POST
+      // completes; nothing is written to storage from the client side. Only
+      // the failure *message* (not card fields) is bridged via sessionStorage
+      // to the success page below.
       if (saveCard && method === "card" && !walletCoversAll) {
         try {
           const [m, y] = cardExp.split("/").map((s) => s.trim());
-          const cardRes = await fetch(`${API}/api/v1/saved-cards`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              holder_name: address.name,
-              card_number: cardNo.replace(/\D/g, ""),
-              cvv: cardCvv,
-              exp_month: Number(m),
-              exp_year: y && y.length === 2 ? 2000 + Number(y) : Number(y),
-            }),
-          });
-          const cj = await cardRes.json().catch(() => null);
-          if (!cardRes.ok || cj?.error) {
-            // Bridge the reason to the success page so the buyer sees why
-            // their card wasn't remembered (we navigate immediately after
-            // this block, so a local banner wouldn't get a chance to show).
-            try {
-              sessionStorage.setItem(
-                "suvcraft_savecard_error",
-                cj?.message || "Could not save card for next time.",
-              );
-            } catch {}
+          const expMonth = Number(m);
+          const expYear = y && y.length === 2 ? 2000 + Number(y) : Number(y);
+          // Skip the call entirely on obviously-malformed inputs so we don't
+          // even send the PAN to a backend that's certain to reject it.
+          if (
+            Number.isFinite(expMonth) && expMonth >= 1 && expMonth <= 12 &&
+            Number.isFinite(expYear) && expYear >= 2000 && expYear <= 2099
+          ) {
+            const cardRes = await fetch(`${API}/api/v1/saved-cards`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                holder_name: address.name,
+                card_number: cardNo.replace(/\D/g, ""),
+                cvv: cardCvv,
+                exp_month: expMonth,
+                exp_year: expYear,
+              }),
+            });
+            const cj = await cardRes.json().catch(() => null);
+            if (!cardRes.ok || cj?.error) {
+              // Bridge the reason to the success page so the buyer sees why
+              // their card wasn't remembered. We never persist card fields
+              // client-side — only the human-readable reason — but the
+              // server-side handler must also ensure its error messages
+              // never echo `card_number` or `cvv` back.
+              try {
+                sessionStorage.setItem(
+                  "suvcraft_savecard_error",
+                  cj?.message || "Could not save card for next time.",
+                );
+              } catch {}
+            }
+          } else {
+            try { sessionStorage.setItem("suvcraft_savecard_error", "Card expiry was invalid — not saved."); } catch {}
           }
         } catch {
           try { sessionStorage.setItem("suvcraft_savecard_error", "Could not save card for next time."); } catch {}

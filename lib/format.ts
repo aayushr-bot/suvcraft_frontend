@@ -10,6 +10,10 @@
 
 const CURRENCY_SYMBOL = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL ?? "₹";
 const CURRENCY_LOCALE = process.env.NEXT_PUBLIC_CURRENCY_LOCALE ?? "en-IN";
+// Date locale defaults to the currency locale (most deployments want one
+// regional formatting set) but can be overridden separately so a market
+// selling in INR to en-GB buyers can still format dates the en-GB way.
+const DATE_LOCALE = process.env.NEXT_PUBLIC_DATE_LOCALE ?? CURRENCY_LOCALE;
 
 // Returns "₹2,499" for `2499`, "₹0" for null/undefined/NaN. By default uses
 // the locale's natural fraction-digit behaviour (typically 0 for whole
@@ -44,5 +48,5 @@ export function formatDate(input: string | number | Date | null | undefined, sty
   if (input == null || input === "") return "";
   const d = input instanceof Date ? input : new Date(input);
   if (Number.isNaN(d.getTime())) return typeof input === "string" ? input : "";
-  return d.toLocaleString(CURRENCY_LOCALE, STYLE_OPTS[style]);
+  return d.toLocaleString(DATE_LOCALE, STYLE_OPTS[style]);
 }

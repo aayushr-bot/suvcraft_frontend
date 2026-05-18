@@ -219,7 +219,18 @@ function mergeItems(local: CartItem[], remote: CartItem[]): CartItem[] {
     // or stock). The cart page's refetch pass later re-caps against the
     // *live* server values, so this is best-effort at merge time.
     if (cur) {
-      const cap = cur.maxQty ?? it.maxQty;
+      // For variant-wise products `maxQty` is undefined and the per-variant
+      // cap arrives via `available_stock` from the cart endpoint. Take the
+      // tightest cap available so a re-login of an already-merged cart
+      // can't push a variant line past its live stock during the window
+      // before the next products refetch re-caps it.
+      const caps = [
+        cur.maxQty,
+        it.maxQty,
+        cur.available_stock,
+        it.available_stock,
+      ].filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+      const cap = caps.length ? Math.min(...caps) : undefined;
       const summed = cur.qty + it.qty;
       const next = cap != null ? Math.min(summed, cap) : summed;
       byKey.set(k, { ...cur, qty: next });

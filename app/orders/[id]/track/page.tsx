@@ -362,9 +362,13 @@ function TrackOrderView({
               {order.tracking.map((t) => {
                 const awb = String(t.awb_code || t.tracking_id || "").trim();
                 const courier = String(t.courier_agency || "").trim();
-                const directUrl = String(t.url || "").trim();
-                const trackHref = directUrl
-                  ? directUrl
+                const rawUrl = String(t.url || "").trim();
+                // Admin-entered URL — only honour http(s) schemes. Without this
+                // a tampered or malicious admin row could ship `javascript:`
+                // (or `data:` / `vbscript:`) into the href and fire on click.
+                const safeDirectUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : "";
+                const trackHref = safeDirectUrl
+                  ? safeDirectUrl
                   : awb
                     ? `https://www.google.com/search?q=${encodeURIComponent(`${courier || "courier"} tracking ${awb}`)}`
                     : "";
