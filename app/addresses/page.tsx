@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CheckCircleSolid } from "../components/icons";
 import type { Address } from "@/lib/api";
 import { lookupPincode } from "@/lib/pincode";
+import AddressCard from "../components/AddressCard";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -237,83 +238,69 @@ export default function AddressesPage() {
           {addresses.map((a) => {
             const isDefault = Number(a.is_default) === 1;
             const editing = editingId === a.id;
+            if (editing) {
+              return (
+                <div
+                  key={a.id}
+                  className="rounded-[5px] border-2 border-dashed p-5 transition-all border-ink-soft bg-[#fafafa]"
+                >
+                  <h3 className="text-[13px] font-bold text-ink mb-3 uppercase tracking-wide">Edit Address</h3>
+                  <AddressFormFields form={form} set={set} onPincodeChange={onPincodeChange} />
+                  {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={saveAddress}
+                      disabled={busy}
+                      className="inline-flex h-[44px] items-center justify-center rounded-[8px] bg-ink-soft px-7 text-[13px] font-bold text-white tracking-[0.1em] hover:bg-black disabled:opacity-60"
+                    >
+                      {busy ? "Saving…" : "Save Changes"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelForm}
+                      className="text-[13px] font-semibold text-[#525151] hover:text-ink"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              );
+            }
             return (
-              <div
+              <AddressCard
                 key={a.id}
-                className={`rounded-[5px] border-2 border-dashed p-5 transition-all ${editing ? "border-ink-soft bg-[#fafafa]" : "border-[#e7e7e7] bg-white"}`}
-              >
-                {!editing ? (
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[15px] font-bold text-ink">{a.name}</span>
-                        <span className="inline-flex h-[20px] items-center rounded-[4px] bg-[#f0f0f0] px-1.5 text-[10px] font-semibold uppercase text-[#525151]">
-                          {a.type || "Home"}
-                        </span>
-                        {isDefault && (
-                          <span className="inline-flex h-[20px] items-center rounded-[4px] bg-emerald-50 px-1.5 text-[10px] font-semibold uppercase text-emerald-700">
-                            Default
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[13px] text-[#525151] leading-[1.6]">
-                        {[a.address, a.landmark, a.city, a.state, a.pincode].filter(Boolean).join(", ")}
-                      </p>
-                      <p className="mt-1 text-[13px] text-[#525151]">{a.mobile}{a.email ? ` · ${a.email}` : ""}</p>
-                    </div>
-                    <div className="flex flex-col gap-2 shrink-0">
-                      {!isDefault && (
-                        <button
-                          type="button"
-                          onClick={() => setAsDefault(a.id)}
-                          disabled={busy}
-                          className="text-[12px] font-semibold text-[#525151] hover:text-ink hover:underline whitespace-nowrap"
-                        >
-                          Set Default
-                        </button>
-                      )}
+                address={a}
+                actions={
+                  <>
+                    {!isDefault && (
                       <button
                         type="button"
-                        onClick={() => startEdit(a)}
-                        className="text-[12px] font-semibold text-[#525151] hover:text-ink hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeAddress(a.id)}
+                        onClick={() => setAsDefault(a.id)}
                         disabled={busy}
-                        className="text-[12px] font-semibold text-red-600 hover:text-red-700 hover:underline"
+                        className="text-[12px] font-semibold text-[#525151] hover:text-ink hover:underline whitespace-nowrap"
                       >
-                        Delete
+                        Set Default
                       </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <h3 className="text-[13px] font-bold text-ink mb-3 uppercase tracking-wide">Edit Address</h3>
-                    <AddressFormFields form={form} set={set} onPincodeChange={onPincodeChange} />
-                    {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
-                    <div className="mt-4 flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={saveAddress}
-                        disabled={busy}
-                        className="inline-flex h-[44px] items-center justify-center rounded-[8px] bg-ink-soft px-7 text-[13px] font-bold text-white tracking-[0.1em] hover:bg-black disabled:opacity-60"
-                      >
-                        {busy ? "Saving…" : "Save Changes"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={cancelForm}
-                        className="text-[13px] font-semibold text-[#525151] hover:text-ink"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => startEdit(a)}
+                      className="text-[12px] font-semibold text-[#525151] hover:text-ink hover:underline"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeAddress(a.id)}
+                      disabled={busy}
+                      className="text-[12px] font-semibold text-red-600 hover:text-red-700 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </>
+                }
+              />
             );
           })}
         </div>

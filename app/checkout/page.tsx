@@ -7,6 +7,7 @@ import { useCart, lineKey } from "@/lib/cartContext";
 import { imgUrl, type Address } from "@/lib/api";
 import { Star } from "../components/icons";
 import ProductImage from "../components/ProductImage";
+import AddressCard from "../components/AddressCard";
 import { formatMoney as fmt } from "@/lib/format";
 import { lookupPincode } from "@/lib/pincode";
 
@@ -290,64 +291,43 @@ export default function CheckoutPage() {
                 {addresses.map((a) => {
                   const selected = selectedId === a.id;
                   const editing = editingId === a.id;
-                  return (
-                    <div
-                      key={a.id}
-                      className={`rounded-[5px] border-2 border-dashed transition-all ${selected ? "border-ink-soft bg-[#fafafa]" : "border-[#e7e7e7] hover:border-[#cfcfcf] bg-white"}`}
-                    >
-                      {!editing ? (
-                        <label className="flex items-start gap-3 p-4 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={selected}
-                            onChange={() => { setSelectedId(a.id); setError(""); }}
-                            className="mt-1 h-4 w-4 accent-ink-soft"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[14px] font-semibold text-ink">{a.name}</span>
-                              {a.type && (
-                                <span className="text-[10px] uppercase font-bold text-[#525151] bg-[#f0f0f0] rounded px-2 py-0.5">
-                                  {a.type}
-                                </span>
-                              )}
-                              {Number(a.is_default) === 1 && (
-                                <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-50 rounded px-2 py-0.5">
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-1 text-[13.5px] text-[#525151] leading-relaxed">
-                              {a.address}{a.landmark ? `, ${a.landmark}` : ""}, {a.city}{a.state ? `, ${a.state}` : ""} – <span className="font-semibold text-ink">{a.pincode}</span>
-                            </p>
-                            <p className="mt-1 text-[12.5px] text-[#878787]">{a.mobile}</p>
-                            {selected && (
-                              <div className="mt-3 flex flex-wrap items-center gap-4 pt-3 border-t border-dashed border-[#e7e7e7]">
-                                <button type="button" onClick={() => startEdit(a)} className="text-[12.5px] font-semibold text-ink hover:underline">
-                                  Edit
-                                </button>
-                                <button type="button" onClick={() => removeAddress(a.id)} disabled={busy} className="text-[12.5px] font-semibold text-[#878787] hover:text-red-600">
-                                  Remove
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </label>
-                      ) : (
-                        <div className="p-4">
-                          <AddressFormFields form={form} set={set} />
-                          {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
-                          <div className="mt-4 flex flex-wrap items-center gap-3">
-                            <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[8px] bg-ink-soft px-8 text-[13px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
-                              {busy ? "SAVING…" : "SAVE"}
-                            </button>
-                            <button type="button" onClick={cancelForm} className="text-[13px] font-semibold text-[#525151] hover:text-ink">
-                              Cancel
-                            </button>
-                          </div>
+                  if (editing) {
+                    return (
+                      <div
+                        key={a.id}
+                        className="rounded-[5px] border-2 border-dashed transition-all border-ink-soft bg-[#fafafa] p-4"
+                      >
+                        <AddressFormFields form={form} set={set} />
+                        {error && <p className="mt-3 text-[13px] font-medium text-red-600">{error}</p>}
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <button type="button" onClick={saveAddress} disabled={busy} className="inline-flex h-[44px] items-center justify-center rounded-[8px] bg-ink-soft px-8 text-[13px] font-bold text-white tracking-wide hover:bg-black disabled:opacity-60">
+                            {busy ? "SAVING…" : "SAVE"}
+                          </button>
+                          <button type="button" onClick={cancelForm} className="text-[13px] font-semibold text-[#525151] hover:text-ink">
+                            Cancel
+                          </button>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <AddressCard
+                      key={a.id}
+                      address={a}
+                      selectable
+                      selected={selected}
+                      onSelect={() => { setSelectedId(a.id); setError(""); }}
+                      actions={
+                        <>
+                          <button type="button" onClick={() => startEdit(a)} className="text-[12.5px] font-semibold text-ink hover:underline">
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => removeAddress(a.id)} disabled={busy} className="text-[12.5px] font-semibold text-[#878787] hover:text-red-600">
+                            Remove
+                          </button>
+                        </>
+                      }
+                    />
                   );
                 })}
               </div>
