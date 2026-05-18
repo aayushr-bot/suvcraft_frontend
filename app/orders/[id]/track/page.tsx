@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { imgUrl } from "@/lib/api";
 import ProductImage from "../../../components/ProductImage";
+import { formatMoney, formatDate as fmtDate } from "@/lib/format";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -27,6 +28,16 @@ type OrderItem = {
   color?: { name: string; swatch?: string };
 };
 
+type TrackingEntry = {
+  id: number;
+  order_item_id?: string | number | null;
+  courier_agency?: string | null;
+  tracking_id?: string | null;
+  url?: string | null;
+  awb_code?: string | null;
+  date_created?: string | null;
+};
+
 type OrderDetail = {
   id: number;
   user_id: number;
@@ -43,6 +54,7 @@ type OrderDetail = {
   customer?: string;
   customer_email?: string;
   items: OrderItem[];
+  tracking?: TrackingEntry[];
   transaction?: {
     id?: number;
     txn_id?: string;
@@ -66,16 +78,8 @@ const TIMELINE_STEPS: { key: string; label: string }[] = [
   { key: "delivered", label: "Delivered" },
 ];
 
-function fmt(n: number | string | undefined) {
-  if (n == null) return "₹0";
-  return `₹${Number(n).toLocaleString("en-IN")}`;
-}
-
-function formatDate(s: string) {
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return s;
-  return d.toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
+const fmt = formatMoney;
+const formatDate = (s: string) => fmtDate(s, "long");
 
 function resolveImg(path: string | undefined) {
   if (!path) return PLACEHOLDER_IMG;
@@ -338,6 +342,69 @@ function TrackOrderView({
                 return (
                   <div key={step.key} className="w-0 flex-1 text-center text-[11px] text-[#878787]">
                     {ts ? formatDate(ts).split(",")[0] : (idx === TIMELINE_STEPS.length - 1 ? `Expected by, ${fmtShortDate(estimatedDelivery)}` : "")}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Shipment tracking — admin-entered courier + AWB. When the order has
+            tracking rows we surface the AWB (copyable) and a "Track with
+            [courier]" link. Falls back to a generic search URL when the admin
+            didn't capture a direct courier link. Shown above the items so the
+            buyer's first instinct ("where is my parcel?") is answered before
+            they scroll. */}
+        {!isCancelled && Array.isArray(order.tracking) && order.tracking.length > 0 && (
+          <div className="mb-8 rounded-[12px] border border-[#e7e7e7] bg-white p-5">
+            <h3 className="text-[15px] font-bold text-ink mb-3">Shipment Tracking</h3>
+            <div className="flex flex-col gap-3">
+              {order.tracking.map((t) => {
+                const awb = String(t.awb_code || t.tracking_id || "").trim();
+                const courier = String(t.courier_agency || "").trim();
+                const directUrl = String(t.url || "").trim();
+                const trackHref = directUrl
+                  ? directUrl
+                  : awb
+                    ? `https://www.google.com/search?q=${encodeURIComponent(`${courier || "courier"} tracking ${awb}`)}`
+                    : "";
+                return (
+                  <div key={t.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
+                    {courier && (
+                      <span className="text-[#525151]">
+                        Courier: <span className="font-semibold text-ink">{courier}</span>
+                      </span>
+                    )}
+                    {awb && (
+                      <span className="text-[#525151] inline-flex items-center gap-2">
+                        AWB:
+                        <code className="rounded bg-[#f6f6f8] px-2 py-0.5 font-mono text-[12px] text-ink">{awb}</code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(awb).catch(() => {});
+                          }}
+                          className="text-[12px] font-semibold text-[#F17A20] hover:text-[#c25e15]"
+                          aria-label="Copy AWB number"
+                        >
+                          Copy
+                        </button>
+                      </span>
+                    )}
+                    {trackHref && (
+                      <a
+                        href={trackHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto inline-flex h-[36px] items-center justify-center gap-1.5 rounded-[8px] bg-ink px-4 text-[13px] font-semibold text-white hover:bg-black"
+                      >
+                        Track with {courier || "courier"}
+                        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="7" y1="17" x2="17" y2="7" />
+                          <polyline points="7 7 17 7 17 17" />
+                        </svg>
+                      </a>
+                    )}
                   </div>
                 );
               })}

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import ProductImage from "../components/ProductImage";
 import { imgUrl } from "@/lib/api";
 import { useCart } from "@/lib/cartContext";
+import { formatMoney as fmt, formatDate as fmtDate } from "@/lib/format";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -43,15 +44,7 @@ const STATUS_LABEL: Record<string, string> = {
   returned: "Returned",
 };
 
-function fmt(n: number | string) {
-  return `₹${Number(n).toLocaleString("en-IN")}`;
-}
-
-function formatDate(s: string) {
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return s;
-  return d.toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
+const formatDate = (s: string) => fmtDate(s, "long");
 
 function resolveImg(path: string | undefined): string {
   if (!path) return PLACEHOLDER_IMG;
@@ -67,6 +60,13 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [error, setError] = useState("");
   const [reorderingId, setReorderingId] = useState<number | null>(null);
+  // Banner for the Buy Again outcome — success message, partial-add warning,
+  // or an explicit server error. Auto-clears after ~4s. Used so the buyer
+  // sees a clear cause when a reorder doesn't behave (out-of-stock items,
+  // removed products, network failure) instead of "nothing happened".
+  const [buyAgainNotice, setBuyAgainNotice] = useState<
+    { kind: "ok" | "warn" | "error"; text: string } | null
+  >(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -78,9 +78,17 @@ export default function OrdersPage() {
 
   async function buyAgain(orderId: number) {
     setReorderingId(orderId);
+    setBuyAgainNotice(null);
     try {
       const res = await fetch(`${API}/api/v1/orders/${orderId}`, { credentials: "include" });
-      const j = await res.json();
+      const j = await res.json().catch(() => null);
+      if (!res.ok || j?.error) {
+        setBuyAgainNotice({
+          kind: "error",
+          text: j?.message || `Couldn't load order #${orderId}. Please try again.`,
+        });
+        return;
+      }
       const items: Array<{
         product_id?: number;
         product_variant_id?: number;
@@ -91,10 +99,15 @@ export default function OrdersPage() {
         size?: string;
         color?: { name: string; swatch?: string };
       }> = j?.data?.order?.items || [];
+      const total = items.length;
+      const skipped: string[] = [];
       let added = 0;
       for (const it of items) {
         const pid = Number(it.product_id);
-        if (!pid) continue;
+        if (!pid) {
+          skipped.push(String(it.product_name || "an item"));
+          continue;
+        }
         addToCart(
           {
             id: pid,
@@ -109,13 +122,37 @@ export default function OrdersPage() {
         );
         added += 1;
       }
-      if (added > 0) router.push("/cart");
+      if (added > 0 && skipped.length === 0) {
+        router.push("/cart");
+        return;
+      }
+      if (added > 0 && skipped.length > 0) {
+        setBuyAgainNotice({
+          kind: "warn",
+          text: `Added ${added} of ${total} item${total === 1 ? "" : "s"} to cart. ${skipped.length} item${skipped.length === 1 ? " is" : "s are"} no longer available.`,
+        });
+        return;
+      }
+      setBuyAgainNotice({
+        kind: "error",
+        text: "None of these items are available right now. Try again later or pick alternatives.",
+      });
     } catch {
-      // silently swallow — user can try again
+      setBuyAgainNotice({
+        kind: "error",
+        text: "Network error. Please check your connection and try again.",
+      });
     } finally {
       setReorderingId(null);
     }
   }
+
+  // Auto-dismiss the notice after a few seconds so the page stays clean.
+  useEffect(() => {
+    if (!buyAgainNotice) return;
+    const t = setTimeout(() => setBuyAgainNotice(null), 4500);
+    return () => clearTimeout(t);
+  }, [buyAgainNotice]);
 
   useEffect(() => {
     fetch(`${API}/api/v1/orders`, { credentials: "include" })
@@ -176,10 +213,43 @@ export default function OrdersPage() {
   const paginated = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
 
   if (orders === null) {
+    // Skeleton cards mirror the real order-row shape so the layout doesn't
+    // jump when data arrives. Three placeholders is enough to suggest "list
+    // of orders" without overcommitting screen real estate.
     return (
       <div className="w-full bg-white min-h-screen">
-        <div className="mx-auto w-full max-w-[1440px] px-4 py-20 md:px-8 flex items-center justify-center">
-          <p className="text-[14px] text-[#8c8c8c]">Loading your orders…</p>
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-10 md:px-8">
+          <div className="mb-6 flex items-baseline gap-3">
+            <div className="h-7 w-40 rounded bg-[#eee] animate-pulse" />
+            <div className="h-4 w-28 rounded bg-[#eee] animate-pulse" />
+          </div>
+          <div className="flex flex-col gap-4">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="rounded-[14px] border border-[#eee] bg-white p-5"
+                aria-hidden
+              >
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <div className="h-5 w-32 rounded bg-[#eee] animate-pulse" />
+                  <div className="h-6 w-24 rounded-full bg-[#eee] animate-pulse" />
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="h-[72px] w-[72px] shrink-0 rounded-[10px] bg-[#eee] animate-pulse" />
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="h-4 w-3/4 rounded bg-[#eee] animate-pulse" />
+                    <div className="h-3 w-1/3 rounded bg-[#eee] animate-pulse" />
+                    <div className="h-3 w-1/4 rounded bg-[#eee] animate-pulse" />
+                  </div>
+                  <div className="hidden sm:flex flex-col items-end gap-2">
+                    <div className="h-10 w-[180px] rounded-[10px] bg-[#eee] animate-pulse" />
+                    <div className="h-10 w-[180px] rounded-[10px] bg-[#eee] animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <span className="sr-only">Loading your orders…</span>
         </div>
       </div>
     );
@@ -293,6 +363,22 @@ export default function OrdersPage() {
             </svg>
           </button>
         </div>
+
+        {buyAgainNotice && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`mb-5 rounded-[10px] px-4 py-3 text-[13px] ${
+              buyAgainNotice.kind === "ok"
+                ? "border border-green-200 bg-green-50 text-green-800"
+                : buyAgainNotice.kind === "warn"
+                  ? "border border-amber-200 bg-amber-50 text-amber-800"
+                  : "border border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {buyAgainNotice.text}
+          </div>
+        )}
 
         {error && (
           <div className="mb-5 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
