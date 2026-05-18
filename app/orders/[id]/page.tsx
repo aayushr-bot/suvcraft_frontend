@@ -8,6 +8,7 @@ import ProductImage from "../../components/ProductImage";
 import RateProductModal from "../../components/RateProductModal";
 import ReturnRequestModal, { type ReturnableItem } from "../../components/ReturnRequestModal";
 import TrackReturnModal from "../../components/TrackReturnModal";
+import { formatMoney as fmt } from "@/lib/format";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -135,10 +136,6 @@ const STATUS_LABEL: Record<string, string> = {
   returned: "Returned",
 };
 
-function fmt(n: number | string | undefined) {
-  if (n == null) return "₹0";
-  return `₹${Number(n).toLocaleString("en-IN")}`;
-}
 
 function formatDate(s: string) {
   const d = new Date(s);
@@ -178,6 +175,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  // Surfaced for ~10s after a successful cancel so the buyer sees the refund
+  // ETA inline instead of wondering "where's my money?". Cleared on refresh.
+  const [refundNotice, setRefundNotice] = useState<{ method: string } | null>(null);
   // Drives the delivery-truck slide-in on the timeline. Starts at 0 and is
   // bumped to reachedIdx after first paint so CSS interpolates the change.
   const [animIdx, setAnimIdx] = useState(0);
@@ -282,6 +282,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       // Refetch the order so the timeline + status badge update.
       const fresh = await fetch(`${API}/api/v1/orders/${order.id}`, { credentials: "include" }).then((r) => r.json());
       if (fresh?.data?.order) setOrder(fresh.data.order);
+      setRefundNotice({ method: String(order.payment_method || "original").toLowerCase() });
     } catch {
       setCancelError("Network error. Please try again.");
     } finally {
@@ -319,15 +320,30 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       .catch(() => {});
   }, [order?.id, order?.status]);
 
-  // Pull the admin-configured return window (defaults to 7 days).
+  // Pull the admin-configured return window (defaults to 7 days). Re-fetch
+  // when the tab regains focus so a long-open order page picks up an admin
+  // change instead of showing a stale deadline.
   useEffect(() => {
-    fetch(`${API}/api/v1/settings`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        const n = Number(j?.data?.return_window_days);
-        if (Number.isFinite(n) && n > 0) setReturnWindowDays(Math.floor(n));
-      })
-      .catch(() => {});
+    let cancelled = false;
+    const refetch = () => {
+      fetch(`${API}/api/v1/settings`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (cancelled) return;
+          const n = Number(j?.data?.return_window_days);
+          if (Number.isFinite(n) && n > 0) setReturnWindowDays(Math.floor(n));
+        })
+        .catch(() => {});
+    };
+    refetch();
+    const onVis = () => {
+      if (document.visibilityState === "visible") refetch();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
 
   // Pre-fetch the buyer's per-line ratings for this order so a previously-rated
@@ -463,6 +479,32 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         <span className="mx-1.5">›</span>
         <span className="text-ink">ID {order.id}</span>
       </nav>
+
+      {/* Post-cancel refund ETA. Shown once after a successful cancel so the
+          buyer doesn't have to chase support for "when do I get my money
+          back?". The wording depends on how they paid — wallet credits go
+          back instantly, gateway refunds take a few working days, COD
+          orders had no money to refund. */}
+      {refundNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-4 flex items-start gap-3 rounded-[10px] border border-green-200 bg-green-50 px-4 py-3 text-[13px] text-green-800"
+        >
+          <svg className="h-5 w-5 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span>
+            Order cancelled.{" "}
+            {refundNotice.method === "cod"
+              ? "No payment was taken — nothing to refund."
+              : refundNotice.method === "wallet"
+                ? "Wallet credit has been returned to your balance."
+                : "Refund will reach your original payment method in 5–7 working days."}
+          </span>
+        </div>
+      )}
 
       {/* Header row */}
       <div className="flex flex-row items-center justify-between gap-3 mb-2">
