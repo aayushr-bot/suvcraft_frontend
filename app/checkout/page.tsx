@@ -397,7 +397,12 @@ export default function CheckoutPage() {
             <div className="rounded-[5px] border-2 border-dashed border-[#e7e7e7] bg-white px-5 py-4 max-h-[300px] overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#cfcfcf transparent" }}>
               {items.map((item, idx) => {
                 const info = productInfo[item.id];
-                const unit = info?.mrp ?? item.price;
+                // The buyer's Unit Price is what they're actually being
+                // charged per unit (`item.price`), not the MRP. Surface the
+                // MRP only as a strike-through comparison when it's higher,
+                // so the line agrees with the subtotal calculation below.
+                const sellingPrice = item.price;
+                const mrp = info?.mrp && info.mrp > sellingPrice ? info.mrp : 0;
                 return (
                   <div key={lineKey(item)} className={`flex items-center gap-3 ${idx > 0 ? "mt-4 pt-4 border-t border-dashed border-[#e7e7e7]" : ""}`}>
                     <div className="h-[60px] w-[60px] shrink-0 rounded-[6px] bg-[#f9f9f9] overflow-hidden flex items-center justify-center">
@@ -423,7 +428,10 @@ export default function CheckoutPage() {
                         </div>
                       )}
                       <div className="text-[12px] text-[#525151]">
-                        Unit Price : <span className="font-semibold text-ink">{unit.toLocaleString("en-IN")}</span>
+                        Unit Price : <span className="font-semibold text-ink">{fmt(sellingPrice)}</span>
+                        {mrp > 0 && (
+                          <span className="ml-1.5 text-[11px] text-[#9c9c9c] line-through">{fmt(mrp)}</span>
+                        )}
                       </div>
                     </div>
                     {info?.rating ? (
