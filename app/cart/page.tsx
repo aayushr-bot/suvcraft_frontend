@@ -9,12 +9,9 @@ import ProductImage from "../components/ProductImage";
 import BuyTogether from "../components/BuyTogether";
 import { useCart, lineKey } from "@/lib/cartContext";
 import { imgUrl } from "@/lib/api";
+import { formatMoney as fmt } from "@/lib/format";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
-
-function fmt(n: number) {
-  return `₹${n.toLocaleString("en-IN")}`;
-}
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 
@@ -86,17 +83,40 @@ export default function CartPage() {
   }
 
   useEffect(() => {
+    let cancelled = false;
+    let savedPin = "";
+    try {
+      savedPin = localStorage.getItem("suvcraft_delivery_pincode") || "";
+      if (savedPin) { setPinInput(savedPin); checkPin(savedPin); }
+    } catch {}
     fetch(`${API}/api/v1/auth/me`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : null)
-      .then((j) => setIsLoggedIn(!!j?.data?.user))
+      .then(async (j) => {
+        if (cancelled) return;
+        const loggedIn = !!j?.data?.user;
+        setIsLoggedIn(loggedIn);
+        // Cross-device pincode recovery: when localStorage has nothing
+        // (fresh device, post-clear, etc.) and the buyer is logged in,
+        // hydrate from their default saved address. Mirrors Amazon's
+        // "remember last delivery location" — without needing a new
+        // column on `users` since addresses already carry the pincode.
+        if (!savedPin && loggedIn) {
+          try {
+            const ar = await fetch(`${API}/api/v1/addresses`, { credentials: "include", cache: "no-store" });
+            if (!ar.ok || cancelled) return;
+            const aj = await ar.json();
+            const list: { is_default?: number | string; pincode?: string }[] = aj?.data?.rows ?? [];
+            const def = list.find((a) => Number(a.is_default) === 1) || list[0];
+            const pin = String(def?.pincode || "").replace(/\D/g, "");
+            if (pin.length === 6 && !cancelled) {
+              setPinInput(pin);
+              checkPin(pin);
+            }
+          } catch {}
+        }
+      })
       .catch(() => setIsLoggedIn(false));
-    try {
-      const saved = localStorage.getItem("suvcraft_delivery_pincode");
-      if (saved) { setPinInput(saved); checkPin(saved); }
-      // No-pincode case: leave editingPin=false so the clean "Check Delivery
-      // Date / CHANGE PINCODE" row shows by default. The input form opens
-      // only when the buyer clicks CHANGE PINCODE.
-    } catch {}
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -211,7 +231,23 @@ export default function CartPage() {
     const r = await applyCoupon(couponInput);
     setCouponBusy(false);
     if (!r.ok) {
-      setCouponError(r.error || "Could not apply coupon.");
+      // When the server rejected the coupon for a min-order shortfall, the
+      // error string carries the threshold (e.g. "Minimum order amount for
+      // this coupon is ₹999."). Pull it out and show a clearer hint with the
+      // exact amount still needed — same affordance Amazon/Flipkart give.
+      const raw = r.error || "Could not apply coupon.";
+      const m = raw.match(/(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d+)?)/i);
+      if (m) {
+        const min = Number(m[1].replace(/,/g, ""));
+        if (Number.isFinite(min) && min > total) {
+          const short = min - total;
+          setCouponError(
+            `Coupon needs ${fmt(min)} minimum — add ${fmt(short)} more to apply.`,
+          );
+          return;
+        }
+      }
+      setCouponError(raw);
       return;
     }
     setCouponInput("");
@@ -462,12 +498,6 @@ export default function CartPage() {
                         <img src="/figma/suvcraft-logo2.png" alt="Suvcraft" className="h-[22px] w-auto" />
                       </span>
                       <div className="flex flex-col items-end gap-2 sm:gap-3">
-                        <span className="inline-flex items-center gap-1 text-[12px] sm:text-[13px] font-bold text-ink">
-                          <svg viewBox="0 0 24 24" fill="#f5a524" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
-                            <path d="M12 2l2.4 5.4L20 8.3l-4 3.9.9 5.5L12 15.1l-4.9 2.6.9-5.5-4-3.9 5.6-.9L12 2z" />
-                          </svg>
-                          4.9
-                        </span>
                         <button
                           onClick={() => removeFromCart(lineKey(item))}
                           aria-label="Remove from cart"
