@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ProductImage from "../components/ProductImage";
 import { imgUrl } from "@/lib/api";
 import { useCart } from "@/lib/cartContext";
 import { formatMoney as fmt, formatDate as fmtDate } from "@/lib/format";
+import { useRefetchOnBack } from "@/lib/use-refetch-on-back";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -154,8 +155,12 @@ export default function OrdersPage() {
     return () => clearTimeout(t);
   }, [buyAgainNotice]);
 
-  useEffect(() => {
-    fetch(`${API}/api/v1/orders`, { credentials: "include" })
+  // Pull the list. Extracted so it can also be triggered when the user
+  // returns to /orders via browser back / tab-focus — Next's router cache
+  // otherwise serves the previous render and the buyer sees stale state
+  // (cancellations placed in another tab, new orders, etc.).
+  const loadOrders = useCallback(() => {
+    fetch(`${API}/api/v1/orders`, { credentials: "include", cache: "no-store" })
       .then(async (r) => {
         if (r.status === 401) { router.push("/"); return null; }
         return r.json();
@@ -167,6 +172,9 @@ export default function OrdersPage() {
       })
       .catch(() => { setError("Network error. Please try again."); setOrders([]); });
   }, [router]);
+
+  useEffect(() => { loadOrders(); }, [loadOrders]);
+  useRefetchOnBack(loadOrders);
 
   const filtered = useMemo(() => {
     let list = (orders || []).slice();

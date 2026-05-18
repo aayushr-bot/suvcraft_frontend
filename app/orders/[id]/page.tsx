@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { imgUrl } from "@/lib/api";
@@ -9,6 +9,7 @@ import RateProductModal from "../../components/RateProductModal";
 import ReturnRequestModal, { type ReturnableItem } from "../../components/ReturnRequestModal";
 import TrackReturnModal from "../../components/TrackReturnModal";
 import { formatMoney as fmt } from "@/lib/format";
+import { useRefetchOnBack } from "@/lib/use-refetch-on-back";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -290,8 +291,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  useEffect(() => {
-    fetch(`${API}/api/v1/orders/${id}`, { credentials: "include" })
+  // Re-fetchable so we can refresh on back-nav / tab focus — without this,
+  // a buyer who cancels from another tab and returns sees a stale "received"
+  // banner instead of "cancelled".
+  const loadOrder = useCallback(() => {
+    fetch(`${API}/api/v1/orders/${id}`, { credentials: "include", cache: "no-store" })
       .then(async (r) => {
         if (r.status === 401) { router.push("/"); return null; }
         return r.json();
@@ -303,6 +307,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       })
       .catch(() => setError("Network error. Please try again."));
   }, [id, router]);
+  useEffect(() => { loadOrder(); }, [loadOrder]);
+  useRefetchOnBack(loadOrder);
 
   // Once the order loads and is delivered, pull existing return/exchange
   // requests so the UI shows "Requested · pending" instead of the button.
