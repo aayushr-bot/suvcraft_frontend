@@ -17,8 +17,6 @@ import {
   SettingsIcon,
   MapPinIcon,
   CreditCardIcon,
-  BellIcon,
-  Trash2,
 } from "./icons";
 import AuthModal from "./AuthModal";
 import ContactModal from "./ContactModal";
@@ -570,14 +568,6 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
                   <CreditCardIcon className="h-4 w-4 text-ink-soft" />
                   <span className="flex-1">Saved Cards</span>
                 </Link>
-                <Link
-                  href="/notifications"
-                  onClick={handleProtectedClick}
-                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]"
-                >
-                  <BellIcon className="h-4 w-4 text-ink-soft" />
-                  <span className="flex-1">Notifications</span>
-                </Link>
 
                 <div className="my-1 border-t border-[#eee]" />
 
@@ -599,14 +589,6 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
                     <span className="flex-1 text-left">Sign Out</span>
                   </button>
                 )}
-                <Link
-                  href="/delete-account"
-                  onClick={handleProtectedClick}
-                  className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="flex-1">Delete Account</span>
-                </Link>
               </div>
             )}
           </div>
@@ -719,10 +701,6 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
                   <CreditCardIcon className="h-4 w-4 text-ink-soft" />
                   <span className="flex-1">Saved Cards</span>
                 </Link>
-                <Link href="/notifications" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-ink hover:bg-[#f6f6f6]">
-                  <BellIcon className="h-4 w-4 text-ink-soft" />
-                  <span className="flex-1">Notifications</span>
-                </Link>
                 <div className="my-1 border-t border-[#eee]" />
                 <button
                   type="button"
@@ -742,10 +720,6 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
                     <span className="flex-1 text-left">Sign Out</span>
                   </button>
                 )}
-                <Link href="/delete-account" onClick={handleProtectedClick} className="flex items-center gap-3 px-4 py-2.5 text-[13px] text-red-600 hover:bg-red-50">
-                  <Trash2 className="h-4 w-4" />
-                  <span className="flex-1">Delete Account</span>
-                </Link>
               </div>
             )}
           </div>
