@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { imgUrl } from "@/lib/api";
+import { formatMoney } from "@/lib/format";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -41,7 +42,7 @@ type ReturnRow = {
 
 function fmtAmt(n: number | string | undefined) {
   if (n == null || n === "") return "—";
-  return `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  return formatMoney(n, { maxFractionDigits: 2 });
 }
 
 type StepDef = {

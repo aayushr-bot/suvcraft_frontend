@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, imgUrl, type Product } from "@/lib/api";
 import { ChevronRight, Star } from "./icons";
 import ProductImage from "./ProductImage";
+import { formatMoney as fmt } from "@/lib/format";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 const SWATCHES = ["#d64545", "#1c1c1c", "#245cbf", "#e5b83a"];
@@ -15,10 +16,6 @@ function getImg(p: { image?: string }) {
   if (p.image.startsWith("/figma/")) return p.image;
   const clean = p.image.startsWith("/uploads/") ? p.image.slice("/uploads/".length) : p.image.replace(/^\//, "");
   return imgUrl(clean);
-}
-
-function fmt(n: number) {
-  return `₹${Number(n).toLocaleString("en-IN")}`;
 }
 
 function getPrice(p: Product) {

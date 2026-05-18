@@ -7,11 +7,12 @@ import { useWishlist } from "@/lib/wishlistContext";
 import ProductImage from "./ProductImage";
 import QuickAddModal from "./QuickAddModal";
 import { HeartFill, Trash2 } from "./icons";
+import { formatMoney } from "@/lib/format";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 
 function fmt(n: number) {
-  return n ? `₹${n.toLocaleString("en-IN")}` : "—";
+  return n ? formatMoney(n) : "—";
 }
 
 function resolveImg(path: string) {

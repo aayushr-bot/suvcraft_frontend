@@ -7,6 +7,7 @@ import { IoCart } from "react-icons/io5";
 import ProductImage from "../components/ProductImage";
 import { type Product, type CategoryTab, type SiteSettings, type Brand, imgUrl } from "@/lib/api";
 import { Star } from "../components/icons";
+import { formatMoney as fmt } from "@/lib/format";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
@@ -17,10 +18,6 @@ function getImg(p: { image?: string }) {
   if (p.image.startsWith("/figma/")) return p.image;
   const clean = p.image.startsWith("/uploads/") ? p.image.slice("/uploads/".length) : p.image.replace(/^\//, "");
   return imgUrl(clean);
-}
-
-function fmt(n: number) {
-  return `₹${Number(n).toLocaleString("en-IN")}`;
 }
 
 function resolveAvatar(path?: string) {
@@ -229,8 +226,8 @@ export default function ProductsClient({
                 />
               </div>
               <div className="mt-3 flex items-center justify-between text-[12px]">
-                <span className="text-[#8c8c8c]">From: <span className="font-semibold text-ink">₹{priceMin.toLocaleString("en-IN")}</span></span>
-                <span className="text-[#8c8c8c]">To: <span className="font-semibold text-ink">₹{priceMax.toLocaleString("en-IN")}</span></span>
+                <span className="text-[#8c8c8c]">From: <span className="font-semibold text-ink">{fmt(priceMin)}</span></span>
+                <span className="text-[#8c8c8c]">To: <span className="font-semibold text-ink">{fmt(priceMax)}</span></span>
               </div>
               <style jsx>{`
                 .dual-range::-webkit-slider-thumb {

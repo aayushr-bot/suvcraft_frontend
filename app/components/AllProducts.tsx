@@ -8,6 +8,7 @@ import ProductImage from "./ProductImage";
 import QuickAddModal from "./QuickAddModal";
 import { type Product, type Category, type CategoryTab, type SiteSettings, imgUrl } from "@/lib/api";
 import { useWishlist } from "@/lib/wishlistContext";
+import { formatMoney as fmt } from "@/lib/format";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 // <Link> auto-prefixes basePath, but window.location.href does NOT.
@@ -20,10 +21,6 @@ function getImg(p: Product) {
   if (p.image.startsWith("/figma/")) return p.image;
   const clean = p.image.startsWith("/uploads/") ? p.image.slice("/uploads/".length) : p.image.replace(/^\//, "");
   return imgUrl(clean);
-}
-
-function fmt(n: number) {
-  return `₹${n.toLocaleString("en-IN")}`;
 }
 
 function getPrice(p: Product) {

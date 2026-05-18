@@ -2,14 +2,11 @@ import { api, imgUrl, type Product, type SiteSettings } from "@/lib/api";
 import Link from "next/link";
 import ProductImage from "../components/ProductImage";
 import { ChevronRight, Star } from "../components/icons";
+import { formatMoney as fmt } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
-
-function fmt(n: number) {
-  return `₹${Number(n || 0).toLocaleString("en-IN")}`;
-}
 
 function getImg(p: { image?: string }) {
   if (!p.image) return PLACEHOLDER_IMG;

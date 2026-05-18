@@ -7,13 +7,14 @@ import { imgUrl } from "@/lib/api";
 import ProductImage from "../components/ProductImage";
 import QuickAddModal from "../components/QuickAddModal";
 import { Trash2, HeartFill } from "../components/icons";
+import { formatMoney } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
 
 function fmt(n: number) {
-  return n ? `₹${n.toLocaleString("en-IN")}` : "—";
+  return n ? formatMoney(n) : "—";
 }
 
 function resolveImg(path: string) {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Star } from "./icons";
 import { type Product, type SiteSettings, imgUrl } from "@/lib/api";
+import { formatMoney } from "@/lib/format";
 
 const HEIGHTS = [240, 290, 200, 160];
 
@@ -42,7 +43,7 @@ export default function TopSelling({ products, settings = {} }: { products: Prod
     return {
       img,
       name: p.name,
-      price: pr ? `₹${pr.toLocaleString("en-IN")}` : "—",
+      price: pr ? formatMoney(pr) : "—",
       rating: `(${Number(p.rating ?? 0).toFixed(1)})`,
       height: HEIGHTS[i % HEIGHTS.length],
       id: p.id,
