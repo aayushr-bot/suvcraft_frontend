@@ -39,6 +39,39 @@ const SHOP_LINK = { id: 0, label: "Shop", href: "/", slug: "shop" };
 
 type User = { name: string; email: string; mobile?: string; image?: string; has_password?: boolean };
 
+// Inline Indian-flag SVG. Three horizontal stripes (saffron / white /
+// green) and the navy-blue Ashoka chakra at the centre — visible even at
+// the small sizes we use inside the search-bar chip.
+function IndiaFlag({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 30 20"
+      role="img"
+      aria-label="India"
+      className={className}
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <rect width="30" height="20" fill="#FFFFFF" />
+      <rect width="30" height="6.67" y="0" fill="#FF9933" />
+      <rect width="30" height="6.67" y="13.33" fill="#138808" />
+      <circle cx="15" cy="10" r="2.4" fill="none" stroke="#000080" strokeWidth="0.7" />
+      {/* 24 chakra spokes — drawn as line()s rotated around the centre */}
+      {Array.from({ length: 24 }).map((_, i) => (
+        <line
+          key={i}
+          x1="15"
+          y1="10"
+          x2="15"
+          y2="7.6"
+          stroke="#000080"
+          strokeWidth="0.18"
+          transform={`rotate(${i * 15} 15 10)`}
+        />
+      ))}
+    </svg>
+  );
+}
+
 function pickDisplayName(user: User): { label: string; isMobile: boolean } {
   const raw = (user.name || "").trim();
   // If "name" is just digits (came from a mobile-OTP signup with no name set), mask it.
@@ -375,6 +408,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
           {/* Top-row search bar (desktop) — moved up from the category rail to
               match the reference layout. Stretches to fill available space. */}
           <label className={`hidden md:flex h-[44px] flex-1 min-w-0 items-center gap-2 rounded-[45px] px-4 shadow-sm lg:h-[48px] lg:px-5 ${isWhiteBody ? "bg-[#F7F7F7]" : "bg-white"}`}>
+            <IndiaFlag className="h-4 w-[22px] shrink-0 rounded-[2px] shadow-sm ring-1 ring-black/10" />
             <input
               type="search"
               placeholder="Search Products"
@@ -629,6 +663,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
         {/* Mobile search bar */}
         <div className="mt-2 flex md:hidden">
           <label className={`flex h-[40px] flex-1 items-center gap-2 rounded-[45px] px-4 shadow-sm ${isWhiteBody ? "bg-[#F7F7F7]" : "bg-white"}`}>
+            <IndiaFlag className="h-3.5 w-[20px] shrink-0 rounded-[2px] shadow-sm ring-1 ring-black/10" />
             <input
               type="search"
               placeholder="Search Product"
