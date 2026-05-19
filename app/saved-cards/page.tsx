@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircleSolid, CreditCardIcon } from "../components/icons";
+import { validateName } from "@/lib/validate";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -122,9 +123,14 @@ export default function SavedCardsPage() {
   }
 
   function validate(): string {
-    if (!holderName.trim()) return "Cardholder name is required.";
+    const nameErr = validateName(holderName);
+    if (nameErr) return nameErr.replace(/^Name /, "Cardholder name ");
     const pan = cardNumber.replace(/\D/g, "");
     if (pan.length < 12 || pan.length > 19) return "Enter a valid card number.";
+    // Luhn check rejects obvious typos and the sequential-digit garbage
+    // ("4844 3462 6264 3462 94…") that previously slipped through the
+    // bare length check.
+    if (!luhnValid(pan)) return "That card number doesn't look right.";
     const m = Number(expMonth);
     if (!m || m < 1 || m > 12) return "Enter a valid expiry month (1-12).";
     const y = Number(expYear.length === 2 ? `20${expYear}` : expYear);
