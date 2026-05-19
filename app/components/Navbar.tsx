@@ -433,7 +433,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
                     <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-brand-purple text-white md:h-[40px] md:w-[40px]">
                       <UserIcon className="h-4 w-4 md:h-5 md:w-5" strokeWidth={1.6} />
                     </span>
-                    <span className="max-w-[100px] truncate md:max-w-[120px]">
+                    <span className="max-w-[72px] truncate sm:max-w-[100px] md:max-w-[120px]">
                       {dn.isMobile ? dn.label : `Hi, ${dn.label}`}
                     </span>
                   </div>
@@ -661,8 +661,12 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
         </div>
 
         {/* Mobile search bar */}
-        <div className="mt-2 flex md:hidden">
-          <label className={`flex h-[40px] flex-1 items-center gap-2 rounded-[45px] px-4 shadow-sm ${isWhiteBody ? "bg-[#F7F7F7]" : "bg-white"}`}>
+        {/* `min-w-0` on the row + the search label is what lets the search
+            shrink past the intrinsic width of its <input>, so the trailing
+            cart icon stops getting clipped off the right edge on narrow
+            phones. Tighter `ml-1.5` gap squeezes another ~6px out. */}
+        <div className="mt-2 flex md:hidden min-w-0">
+          <label className={`flex h-[40px] flex-1 min-w-0 items-center gap-2 rounded-[45px] px-4 shadow-sm ${isWhiteBody ? "bg-[#F7F7F7]" : "bg-white"}`}>
             <IndiaFlag className="h-3.5 w-[20px] shrink-0 rounded-[2px] shadow-sm ring-1 ring-black/10" />
             <input
               type="search"
@@ -670,7 +674,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="flex-1 bg-transparent text-[13px] text-ink placeholder:text-[#8c8c8c] focus:outline-none"
+              className="flex-1 min-w-0 bg-transparent text-[13px] text-ink placeholder:text-[#8c8c8c] focus:outline-none"
             />
             <button type="button" onClick={handleSearch} aria-label="Search">
               <SearchIcon className="h-4 w-4 text-ink-soft" />
@@ -682,7 +686,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
             type="button"
             onClick={() => { if (!user) { setIsSignInOpen(true); return; } setIsWishlistOpen(true); }}
             aria-label="Wishlist"
-            className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5"
+            className="relative ml-1.5 flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full text-ink-soft hover:bg-black/5"
           >
             <HeartLine className="h-5 w-5" />
             {wishlistCount > 0 && (
@@ -691,7 +695,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               </span>
             )}
           </button>
-          <div className="relative ml-2" ref={mobileSettingsRef}>
+          <div className="relative ml-1.5 shrink-0" ref={mobileSettingsRef}>
             <button
               type="button"
               aria-label="Settings"
@@ -758,7 +762,7 @@ function NavbarInner({ categories = [], activeCategoryId, logo, siteTitle }: Nav
               </div>
             )}
           </div>
-          <Link href="/cart" aria-label="Cart" className="relative ml-2 flex h-[40px] w-[40px] items-center justify-center rounded-full text-ink-soft hover:bg-black/5">
+          <Link href="/cart" aria-label="Cart" className="relative ml-1.5 flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full text-ink-soft hover:bg-black/5">
             <CartIcon className="h-5 w-5" strokeWidth={1.5} />
             {cartCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-purple px-1 text-[10px] font-bold text-white">

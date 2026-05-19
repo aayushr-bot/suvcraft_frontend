@@ -756,16 +756,20 @@ export default function ProductDetailClient({
             {product.short_description && (
               <div className="mb-2 text-[13px] text-[#525151]">{product.short_description}</div>
             )}
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <h1 className="text-[28px] font-semibold leading-tight text-ink md:text-[32px]">
+            {/* Mobile (<md): stack rating + "Fulfilled by" inline above the
+                product name so they can't overlap the "% off" chip on a
+                narrow viewport. Desktop (md+): the right column floats next
+                to the name as it always did. */}
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+              <div className="order-2 flex-1 min-w-0 md:order-1">
+                <h1 className="text-[26px] font-semibold leading-tight text-ink md:text-[32px]">
                   {product.name}
                 </h1>
-                <div className="mt-3 flex items-center gap-3">
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   {original > 0 && (
-                    <span className="text-[16px] text-[#8c8c8c] line-through">{fmt(original)}</span>
+                    <span className="text-[15px] text-[#8c8c8c] line-through">{fmt(original)}</span>
                   )}
-                  <span className="text-[26px] font-bold text-ink">{fmt(current)}</span>
+                  <span className="text-[24px] font-bold text-ink md:text-[26px]">{fmt(current)}</span>
                   {original > 0 && (
                     <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[12px] font-semibold text-green-700">
                       {Math.round(((original - current) / original) * 100)}% off
@@ -773,17 +777,17 @@ export default function ProductDetailClient({
                   )}
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2 pt-1 shrink-0">
+              <div className="order-1 flex flex-row items-center justify-between gap-3 md:order-2 md:flex-col md:items-end md:gap-2 md:pt-1 md:shrink-0">
                 {Number(product.rating) > 0 && (
-                  <div className="flex items-center gap-1 text-[18px] font-bold text-ink">
-                    <Star className="h-5 w-5 text-[#f5a524]" />
+                  <div className="flex items-center gap-1 text-[16px] font-bold text-ink md:text-[18px]">
+                    <Star className="h-4 w-4 text-[#f5a524] md:h-5 md:w-5" />
                     {Number(product.rating).toFixed(1)}
                   </div>
                 )}
-                <div className="inline-flex flex-col items-center gap-1.5">
-                  <span className="text-[14px] font-medium text-ink leading-none">Fulfilled by</span>
+                <div className="inline-flex items-center gap-2 md:flex-col md:items-center md:gap-1.5">
+                  <span className="text-[12px] font-medium text-ink leading-none md:text-[14px]">Fulfilled by</span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/figma/suvcraft-logo2.png" alt="Suvcraft" className="h-8 w-auto" />
+                  <img src="/figma/suvcraft-logo2.png" alt="Suvcraft" className="h-6 w-auto md:h-8" />
                 </div>
               </div>
             </div>
