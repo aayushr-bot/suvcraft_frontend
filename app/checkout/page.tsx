@@ -10,6 +10,7 @@ import ProductImage from "../components/ProductImage";
 import AddressCard from "../components/AddressCard";
 import { formatMoney as fmt } from "@/lib/format";
 import { lookupPincode } from "@/lib/pincode";
+import { validateName, validateEmail, validateIndianMobile } from "@/lib/validate";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const PLACEHOLDER_IMG = "/product-placeholder.svg";
@@ -159,9 +160,12 @@ export default function CheckoutPage() {
   }
 
   function validate(): string {
-    if (!form.name.trim()) return "Full name is required.";
-    if (!/^\d{10}$/.test(form.mobile.replace(/\D/g, ""))) return "Enter a valid 10-digit mobile number.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Enter a valid email address.";
+    const nameErr = validateName(form.name);
+    if (nameErr) return nameErr;
+    const mobileErr = validateIndianMobile(form.mobile);
+    if (mobileErr) return mobileErr;
+    const emailErr = validateEmail(form.email);
+    if (emailErr) return emailErr;
     if (!/^\d{6}$/.test(form.pincode.trim())) return "Enter a valid 6-digit pincode.";
     if (!form.address.trim()) return "Address is required.";
     if (!form.city.trim()) return "City is required.";

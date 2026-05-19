@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircleSolid, UserIcon } from "../components/icons";
 import { imgUrl } from "@/lib/api";
+import { validateName, validateEmail, validateIndianMobile } from "@/lib/validate";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -123,11 +124,10 @@ export default function ProfilePage() {
 
   async function saveProfile() {
     setProfileError("");
-    if (!name.trim()) { setProfileError("Name is required."); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setProfileError("Enter a valid email address.");
-      return;
-    }
+    const nameErr = validateName(name);
+    if (nameErr) { setProfileError(nameErr); return; }
+    const emailErr = validateEmail(email);
+    if (emailErr) { setProfileError(emailErr); return; }
     setProfileBusy(true);
     try {
       const res = await fetch(`${API}/api/v1/auth/me`, {
@@ -185,7 +185,8 @@ export default function ProfilePage() {
     setMobileError("");
     setMobileDevPreview("");
     const cleaned = newMobile.replace(/\D/g, "");
-    if (cleaned.length < 10) { setMobileError("Enter a valid 10-digit mobile number."); return; }
+    const mErr = validateIndianMobile(cleaned);
+    if (mErr) { setMobileError(mErr); return; }
     if (cleaned === user?.mobile) { setMobileError("That's already your current mobile."); return; }
     setMobileBusy(true);
     try {
