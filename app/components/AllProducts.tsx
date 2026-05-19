@@ -211,8 +211,11 @@ export default function AllProducts({
                 style={{ height: 360, width: 260 }}
                 onClick={() => { window.location.href = `${BASE}/product/${p.id}`; }}
               >
-                <div className="flex items-start px-3 pt-3">
-                  <div className="flex items-center gap-1.5">
+                {/* Image area with Offer chips (top-left) + heart/cart
+                    quick-actions (top-right) overlaid — matches the
+                    Popular-This-Week card style on the PDP. */}
+                <div className="relative flex flex-1 items-center justify-center px-4 pb-3 pt-1">
+                  <div className="absolute left-3 top-3 z-10 flex items-center gap-1.5">
                     <span className="inline-flex h-[24px] items-center gap-1 rounded-[6px] bg-chip px-2 text-[11px] font-medium text-white">
                       <TagIcon className="h-3 w-3" />
                       Offer
@@ -222,32 +225,27 @@ export default function AllProducts({
                       Bestseller
                     </span>
                   </div>
-                </div>
-
-                {/* Stacked heart + cart, anchored to the top-right so they don't push the image down */}
-                <div className="absolute right-3 top-3 z-10 flex flex-col items-center gap-1.5">
-                  <button
-                    type="button"
-                    aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
-                    aria-pressed={wishlist.has(p.id)}
-                    onClick={(e) => toggleFav(e, p)}
-                    className="flex h-[36px] w-[36px] items-center justify-center transition-all"
-                  >
-                    {wishlist.has(p.id)
-                      ? <HeartFill className="h-7 w-7 text-[#D90A0A]" />
-                      : <IoMdHeartEmpty className="h-7 w-7 text-[#a3a3a3]" />}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Add to cart"
-                    onClick={(e) => openQuickAdd(e, p)}
-                    className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
-                  >
-                    <IoCart className="h-[18px] w-[18px] text-white" />
-                  </button>
-                </div>
-
-                <div className="relative flex flex-1 items-center justify-center px-4 pb-3 pt-1">
+                  <div className="absolute right-3 top-3 z-10 flex flex-col items-center gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
+                      aria-pressed={wishlist.has(p.id)}
+                      onClick={(e) => toggleFav(e, p)}
+                      className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-white shadow-sm hover:bg-[#fafafa] transition-colors"
+                    >
+                      {wishlist.has(p.id)
+                        ? <HeartFill className="h-[18px] w-[18px] text-[#D90A0A]" />
+                        : <IoMdHeartEmpty className="h-[18px] w-[18px] text-[#a3a3a3]" />}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Add to cart"
+                      onClick={(e) => openQuickAdd(e, p)}
+                      className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-white shadow-sm hover:bg-[#fafafa] text-ink transition-colors"
+                    >
+                      <IoCart className="h-[18px] w-[18px]" />
+                    </button>
+                  </div>
                   <ProductImage src={getImg(p)} alt={p.name} className="h-[200px] w-full object-contain group-hover:scale-105 transition-transform duration-300" />
                 </div>
 
@@ -290,33 +288,34 @@ export default function AllProducts({
             className="relative flex flex-col overflow-hidden rounded-[18px] border border-[#e7e7e7] bg-paper active:scale-[0.98] transition-transform cursor-pointer"
             onClick={() => { window.location.href = `${BASE}/product/${p.id}`; }}
           >
-            <div className="flex items-start justify-between px-3 pt-3">
-              <span className="inline-flex h-[22px] items-center gap-0.5 rounded-[6px] bg-chip px-1.5 text-[10px] font-medium text-white">
+            {/* Image area with Offer chip (top-left) + heart/cart
+                quick-actions (top-right) overlaid — matches the
+                Popular-This-Week card style on the PDP. */}
+            <div className="relative flex items-center justify-center px-3 py-2">
+              <span className="absolute left-3 top-3 z-10 inline-flex h-[22px] items-center gap-0.5 rounded-[6px] bg-chip px-1.5 text-[10px] font-medium text-white">
                 <TagIcon className="h-2.5 w-2.5" />Offer
               </span>
-              <div className="flex flex-col items-center gap-1">
+              <div className="absolute right-3 top-3 z-10 flex flex-col items-center gap-1">
                 <button
                   type="button"
                   aria-label={wishlist.has(p.id) ? "Remove from wishlist" : "Add to wishlist"}
                   aria-pressed={wishlist.has(p.id)}
                   onClick={(e) => toggleFav(e, p)}
-                  className="relative z-10 flex h-[32px] w-[32px] items-center justify-center transition-all"
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white shadow-sm hover:bg-[#fafafa] transition-colors"
                 >
                   {wishlist.has(p.id)
-                    ? <HeartFill className="h-6 w-6 text-[#D90A0A]" />
-                    : <IoMdHeartEmpty className="h-6 w-6 text-[#a3a3a3]" />}
+                    ? <HeartFill className="h-4 w-4 text-[#D90A0A]" />
+                    : <IoMdHeartEmpty className="h-4 w-4 text-[#a3a3a3]" />}
                 </button>
                 <button
                   type="button"
                   aria-label="Add to cart"
                   onClick={(e) => openQuickAdd(e, p)}
-                  className="relative z-10 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#414141] text-white hover:bg-ink transition-colors"
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white shadow-sm hover:bg-[#fafafa] text-ink transition-colors"
                 >
-                  <IoCart className="h-4 w-4 text-white" />
+                  <IoCart className="h-4 w-4" />
                 </button>
               </div>
-            </div>
-            <div className="flex items-center justify-center px-3 py-2">
               <ProductImage src={getImg(p)} alt={p.name} className="h-[130px] w-full object-contain" />
             </div>
             <div className="border-t border-[#eeeeee] px-3 py-2">
